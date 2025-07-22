@@ -1,14 +1,18 @@
-import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
+from tinydb import TinyDB
+from uuid import uuid4
 from datetime import datetime, timedelta
 
-MONGO_URI = "mongodb://localhost:27017"
-client = AsyncIOMotorClient(MONGO_URI)
-db = client.os_viewer
-collection = db.ordens
+DB_PATH = "db.json"
+db = TinyDB(DB_PATH)
+table = db.table("ordens")
 
+# Limpa os dados existentes
+table.truncate()
+
+# Dados de exemplo
 dados = [
     {
+        "id": str(uuid4()),
         "cliente": "João Silva",
         "tipo": "garantia",
         "descricao": "Substituição da placa de controle",
@@ -17,6 +21,7 @@ dados = [
         "status": "pendente"
     },
     {
+        "id": str(uuid4()),
         "cliente": "Maria Souza",
         "tipo": "serviço",
         "descricao": "Reparo no motor principal",
@@ -25,6 +30,7 @@ dados = [
         "status": "pendente"
     },
     {
+        "id": str(uuid4()),
         "cliente": "Empresa XYZ",
         "tipo": "garantia",
         "descricao": "Garantia do inversor de frequência",
@@ -33,6 +39,7 @@ dados = [
         "status": "pendente"
     },
     {
+        "id": str(uuid4()),
         "cliente": "Carlos Mendes",
         "tipo": "serviço",
         "descricao": "Limpeza e calibração",
@@ -42,10 +49,6 @@ dados = [
     }
 ]
 
-async def popular_banco():
-    await collection.delete_many({})
-    await collection.insert_many(dados)
-    print("Banco populado com sucesso!")
-
-if __name__ == "__main__":
-    asyncio.run(popular_banco())
+# Insere no banco
+table.insert_multiple(dados)
+print("Banco populado com sucesso!")

@@ -1,32 +1,70 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Form, status
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi.responses import RedirectResponse
+from tinydb import TinyDB
+from uuid import uuid4
+from datetime import datetime
 import os
 
 app = FastAPI()
 
-# Config MongoDB
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-client = AsyncIOMotorClient(MONGO_URI)
-db = client.os_viewer
-collection = db.ordens
+DB_PATH = "db.json"
+db = TinyDB(DB_PATH)
+table = db.table("ordens")
 
-# Config Template e Static
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Conversor BSON -> JSON
+
 def serialize_os(os):
-    os["id"] = str(os["_id"])
-    os.pop("_id")
-    return os
+    return {
+        "id": os.get("id"),
+        "os": os.get("os"),
+        "tipo": os.get("tipo"),
+        "cliente": os.get("cliente"),
+        "equipamento": os.get("equipamento"),
+        "entrada": os.get("entrada"),
+        "prazo_entrega": os.get("prazo_entrega"),
+        "status": os.get("status"),
+    }
+
 
 @app.get("/")
 async def index(request: Request):
-    os_cursor = collection.find().sort([
-        ("tipo", 1),  # 'garantia' vem antes de 'serviço'
-        ("prazo_entrega", 1)
-    ])
-    os_list = [serialize_os(os) async for os in os_cursor]
-    return templates.TemplateResponse("index.html", {"request": request, "ordens": os_list})
+    os_list = sorted(
+        table.all(),
+        key=lambda x: (x["tipo"] != "garantia", x["prazo_entrega"])
+    )
+    os_serialized = [serialize_os(os) for os in os_list]
+    return templates.TemplateResponse("index.html", {"request": request, "ordens": os_serialized})
+
+
+@app.get("/os/novo")
+async def criar_os_form(request: Request):
+    return templates.TemplateResponse("os_form.html", {"request": request})
+
+
+@app.post("/os/novo")
+async def criar_os(
+    request: Request,
+    os_num: str = Form(...),
+    tipo: str = Form(...),
+    cliente: str = Form(...),
+    equipamento: str = Form(...),
+    entrada: str = Form(...),
+    prazo_entrega: str = Form(...),
+    status: str = Form(...)
+):
+    nova_os = {
+        "id": str(uuid4()),
+        "os": os_num,
+        "tipo": tipo,
+        "cliente": cliente,
+        "equipamento": equipamento,
+        "entrada": entrada,
+        "prazo_entrega": prazo_entrega,
+        "status": status,
+    }
+    table.insert(nova_os)
+    return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
