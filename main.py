@@ -2,7 +2,6 @@ from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
-from bson import ObjectId
 import os
 
 app = FastAPI()
@@ -18,7 +17,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # Conversor BSON -> JSON
-
 def serialize_os(os):
     os["id"] = str(os["_id"])
     os.pop("_id")
