@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ordens de Serviço</title>
+  <title>Gerenciador de Serviços</title>
 
   <!-- Bootstrap CSS -->
   <link
@@ -30,11 +30,14 @@
       color: #198754;
       font-weight: 600;
     }
+    .text-danger {
+      color: #dc3545 !important;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1 class="mb-4 text-center">Ordens de Serviço</h1>
+    <h1 class="mb-4 text-center">Gerenciador de Serviços</h1>
 
     <div class="d-flex justify-content-between align-items-center mb-3">
       <div>
@@ -44,6 +47,12 @@
           <option value="garantia">Garantia</option>
           <option value="serviço">Serviço</option>
         </select>
+      </div>
+      <div>
+        <!-- Botão Criar OS -->
+        <a href="/os/novo" class="btn btn-success">
+          <i class="bi bi-plus-circle"></i> Nova Ordem
+        </a>
       </div>
     </div>
 
@@ -58,6 +67,7 @@
             <th>Entrada</th>
             <th>Prazo de Entrega</th>
             <th>Status</th>
+            <th>Ações</th>
           </tr>
         </thead>
         <tbody id="osTableBody">
@@ -78,9 +88,24 @@
             <td>
               {% if os.status == 'pendente' %}
                 <span class="status-pendente"><i class="bi bi-hourglass-split"></i> Pendente</span>
-              {% else %}
+              {% elif os.status == 'finalizada' %}
                 <span class="status-finalizada"><i class="bi bi-check-circle"></i> Finalizada</span>
+              {% elif os.status == 'atrasado' %}
+                <span class="text-danger fw-bold"><i class="bi bi-exclamation-triangle-fill"></i> Atrasado</span>
+              {% else %}
+                {{ os.status }}
               {% endif %}
+            </td>
+            <td>
+              <a href="/os/{{ os.id }}/editar" class="btn btn-primary btn-sm me-1" title="Editar">
+                <i class="bi bi-pencil"></i>
+              </a>
+
+              <form method="post" action="/os/{{ os.id }}/deletar" style="display:inline;" onsubmit="return confirm('Confirma exclusão dessa ordem?');">
+                <button type="submit" class="btn btn-danger btn-sm" title="Excluir">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
             </td>
           </tr>
           {% endfor %}
@@ -89,10 +114,8 @@
     </div>
   </div>
 
-  <!-- Bootstrap JS Bundle (Popper + Bootstrap) -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
-  ></script>
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
     // Filtro simples por tipo

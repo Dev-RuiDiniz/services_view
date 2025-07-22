@@ -2,10 +2,9 @@ from fastapi import FastAPI, Request, Form, status
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
-from tinydb import TinyDB
+from tinydb import TinyDB, Query
 from uuid import uuid4
 from datetime import datetime
-import os
 
 app = FastAPI()
 
@@ -32,8 +31,18 @@ def serialize_os(os):
 
 @app.get("/")
 async def index(request: Request):
+    os_list = table.all()
+
+    # Atualiza status dinâmico para atrasado se for serviço e passou do prazo
+    for os in os_list:
+        if os["tipo"] == "serviço":
+            prazo = datetime.strptime(os["prazo_entrega"], "%Y-%m-%d")
+            hoje = datetime.today()
+            if os["status"] == "pendente" and hoje > prazo:
+                os["status"] = "atrasado"
+
     os_list = sorted(
-        table.all(),
+        os_list,
         key=lambda x: (x["tipo"] != "garantia", x["prazo_entrega"])
     )
     os_serialized = [serialize_os(os) for os in os_list]
@@ -67,4 +76,45 @@ async def criar_os(
         "status": status,
     }
     table.insert(nova_os)
+    return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.get("/os/{os_id}/editar")
+async def editar_os_form(request: Request, os_id: str):
+    query = Query()
+    os_item = table.get(query.id == os_id)
+    if not os_item:
+        return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse("os_edit_form.html", {"request": request, "os": os_item})
+
+
+@app.post("/os/{os_id}/editar")
+async def editar_os(
+    request: Request,
+    os_id: str,
+    os_num: str = Form(...),
+    tipo: str = Form(...),
+    cliente: str = Form(...),
+    equipamento: str = Form(...),
+    entrada: str = Form(...),
+    prazo_entrega: str = Form(...),
+    status: str = Form(...)
+):
+    query = Query()
+    table.update({
+        "os": os_num,
+        "tipo": tipo,
+        "cliente": cliente,
+        "equipamento": equipamento,
+        "entrada": entrada,
+        "prazo_entrega": prazo_entrega,
+        "status": status,
+    }, query.id == os_id)
+    return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/os/{os_id}/deletar")
+async def deletar_os(os_id: str):
+    query = Query()
+    table.remove(query.id == os_id)
     return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
