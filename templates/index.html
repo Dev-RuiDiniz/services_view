@@ -72,7 +72,7 @@
         </thead>
         <tbody id="osTableBody">
           {% for os in ordens %}
-          <tr data-tipo="{{ os.tipo }}">
+          <tr data-tipo="{{ os.tipo }}" data-prazo-entrega="{{ os.prazo_entrega }}">
             <td>{{ os.os }}</td>
             <td>
               {% if os.tipo == 'garantia' %}
@@ -83,8 +83,8 @@
             </td>
             <td>{{ os.cliente }}</td>
             <td>{{ os.equipamento }}</td>
-            <td>{{ os.entrada }}</td>
-            <td>{{ os.prazo_entrega }}</td>
+            <td>{{ os.entrada_formatada }}</td> {# Usando a data já formatada do backend #}
+            <td>{{ os.prazo_formatado }}</td> {# Usando a data já formatada do backend #}
             <td>
               {% if os.status == 'pendente' %}
                 <span class="status-pendente"><i class="bi bi-hourglass-split"></i> Pendente</span>
@@ -118,22 +118,64 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
-    // Filtro simples por tipo
+    // Função para parsear datas no formato YYYY-MM-DD
+    function parseDate(dateString) {
+      const parts = dateString.split('-');
+      // Mês é 0-indexed no JavaScript Date, então subtraímos 1
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+
+    // Ordenação e Filtro
     const filterSelect = document.getElementById('filterTipo');
     const tableBody = document.getElementById('osTableBody');
+    // Converter HTMLCollection para Array para facilitar a manipulação
+    let rows = Array.from(tableBody.rows);
 
-    filterSelect.addEventListener('change', () => {
+    // Função para renderizar a tabela com as linhas ordenadas e filtradas
+    function renderTable(filteredRows) {
+      tableBody.innerHTML = ''; // Limpa a tabela
+      // Adiciona as linhas de volta na ordem correta
+      filteredRows.forEach(row => tableBody.appendChild(row));
+    }
+
+    function applyFiltersAndSort() {
       const filter = filterSelect.value;
+      let filteredRows = rows;
 
-      for (const row of tableBody.rows) {
-        const tipo = row.getAttribute('data-tipo');
-        if (filter === 'todos' || tipo === filter) {
-          row.style.display = '';
-        } else {
-          row.style.display = 'none';
-        }
+      // Aplicar filtro
+      if (filter !== 'todos') {
+        filteredRows = rows.filter(row => row.getAttribute('data-tipo') === filter);
       }
-    });
+
+      // Separar garantias e serviços para ordenação
+      const garantias = filteredRows.filter(row => row.getAttribute('data-tipo') === 'garantia');
+      const servicos = filteredRows.filter(row => row.getAttribute('data-tipo') === 'serviço');
+
+      // Ordenar garantias pelo prazo de entrega mais próximo para o mais distante
+      garantias.sort((a, b) => {
+        const dateA = parseDate(a.getAttribute('data-prazo-entrega'));
+        const dateB = parseDate(b.getAttribute('data-prazo-entrega'));
+        return dateA - dateB;
+      });
+
+      // Ordenar serviços pelo prazo de entrega mais próximo para o mais distante
+      servicos.sort((a, b) => {
+        const dateA = parseDate(a.getAttribute('data-prazo-entrega'));
+        const dateB = parseDate(b.getAttribute('data-prazo-entrega'));
+        return dateA - dateB;
+      });
+
+      // Juntar garantias e serviços na ordem desejada (garantias primeiro)
+      const sortedAndFilteredRows = [...garantias, ...servicos];
+
+      renderTable(sortedAndFilteredRows);
+    }
+
+    // Adicionar listener para o filtro
+    filterSelect.addEventListener('change', applyFiltersAndSort);
+
+    // Chamar a função de ordenação e filtro inicialmente para ordenar a tabela ao carregar
+    document.addEventListener('DOMContentLoaded', applyFiltersAndSort);
   </script>
 </body>
 </html>
