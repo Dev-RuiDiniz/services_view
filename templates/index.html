@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Ordens de Serviço</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h1>Ordens de Serviço</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Cliente</th>
+                <th>Tipo</th>
+                <th>Descrição</th>
+                <th>Data de Criação</th>
+                <th>Prazo de Entrega</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for os in ordens %}
+            <tr>
+                <td>{{ os.cliente }}</td>
+                <td>{{ os.tipo }}</td>
+                <td>{{ os.descricao }}</td>
+                <td>{{ os.data_criacao[:10] }}</td>
+                <td>{{ os.prazo_entrega[:10] }}</td>
+                <td>{{ os.status }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
