@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import uvicorn
+from fastapi.templating import Jinja2Templates 
+from routes.os_routes import os_router
 
 # Importar a função de setup do banco de dados
 from database.db_setup import create_all_tables
@@ -31,6 +33,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan # Conecta o context manager ao ciclo de vida
 )
+
+# Configuração do motor de templates para a pasta 'templates'
+templates = Jinja2Templates(directory="templates")
 
 # 3. Montagem de Arquivos Estáticos
 # Permite acessar arquivos em static/ via URL /static/...
