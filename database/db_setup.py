@@ -29,8 +29,6 @@ AsyncSessionLocal = sessionmaker(
 )
 
 # 4. Base Declarativa
-# Usada por todas as classes de modelo (em models/) para herdar e definir
-# as tabelas no banco de dados.
 Base = declarative_base()
 
 
@@ -41,3 +39,18 @@ async def get_db():
     """
     async with AsyncSessionLocal() as session:
         yield session
+
+
+# 5. Função para criar todas as tabelas no startup
+async def create_all_tables():
+    """
+    Cria todas as tabelas no banco de dados, se não existirem, usando a engine assíncrona.
+    
+    NOTA: Esta função é assíncrona.
+    """
+    # Abre uma conexão assíncrona de "begin" (transação)
+    async with engine.begin() as conn:
+        # Executa a operação Base.metadata.create_all, que é síncrona,
+        # de forma segura em um pool de threads, liberando o event loop.
+        await conn.run_sync(Base.metadata.create_all)
+        print("✅ Tabelas inicializadas no banco de dados (db.sqlite).")
