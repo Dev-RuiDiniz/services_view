@@ -54,3 +54,10 @@ async def create_all_tables():
         # de forma segura em um pool de threads, liberando o event loop.
         await conn.run_sync(Base.metadata.create_all)
         print("✅ Tabelas inicializadas no banco de dados (db.sqlite).")
+
+async def get_db():
+    """
+    Função geradora para fornecer uma sessão de banco de dados por requisição.
+    """
+    async with AsyncSessionLocal() as session:
+        yield session
