@@ -1,43 +1,54 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.os_model import OrdemServico # Importa o modelo que vamos manipular
-from typing import List
+from typing import List, Optional
 
-# A Camada de Serviço é uma classe (ou conjunto de funções) que orquestra
-# as operações de negócio e o acesso ao banco de dados.
+# A Camada de Serviço é uma classe que orquestra as operações de negócio.
 
 class OrdemServicoService:
     """
     Serviços de Ordem de Serviço. Contém a lógica de negócio.
+    Esta classe não cria a sessão do DB, mas a utiliza.
     """
-
-    # O método recebe a sessão (db) injetada pela rota
-    async def create_ordem_servico(self, db: AsyncSession, os_data: dict) -> OrdemServico:
+    
+    # ----------------------------------------------------
+    # O método create_os usa a sessão (db) que será injetada
+    # ----------------------------------------------------
+    async def create_os(self, db: AsyncSession, os_data: dict) -> OrdemServico:
         """
         Cria uma nova Ordem de Serviço no banco de dados.
+
+        Argumentos:
+            db (AsyncSession): A sessão do banco de dados injetada pela rota.
+            os_data (dict): Dicionário contendo os dados da nova OS.
+            
+        Retorna:
+            OrdemServico: A instância do objeto após ser persistido e atualizado (refresh).
         """
-        # Cria a instância do modelo
+        
+        # 1. Instancia o modelo com os dados recebidos.
+        # Os campos default (id, data_entrada, data_criacao, status) são preenchidos
+        # automaticamente se não estiverem em os_data.
         novo_os = OrdemServico(**os_data)
         
-        # Adiciona à sessão e marca para ser commitado
+        # 2. Adiciona o objeto à sessão.
         db.add(novo_os)
+        
+        # 3. Executa o commit assíncrono para persistir no banco.
+        # Note o 'await' e a chamada direta ao db.commit().
         await db.commit()
-        await db.refresh(novo_os) # Atualiza a instância com o ID gerado (se não for UUID)
+        
+        # 4. Atualiza a instância para garantir que o objeto Python tenha
+        # os valores gerados pelo banco (como o ID e timestamps).
+        await db.refresh(novo_os) 
         
         return novo_os
 
+    # Mantendo o método de busca para referência futura
     async def get_all_ordens_servico(self, db: AsyncSession) -> List[OrdemServico]:
         """
         Busca todas as Ordens de Serviço.
         """
-        # Exemplo de consulta simples (usando SQLAlchemy 2.0 Style)
-        # Note que a sessão (db) é usada aqui, e não criada.
         from sqlalchemy import select
         result = await db.execute(select(OrdemServico))
+        # O .scalars().all() é o padrão do SQLAlchemy 2.0 para obter os objetos modelo
         return result.scalars().all()
-
-
-# Exemplo de como você usaria essa classe na sua rota (routes/):
-# @router.post("/")
-# async def criar_os(os_data: Schema, db: AsyncSession = Depends(get_db)):
-#     service = OrdemServicoService()
-#     return await service.create_ordem_servico(db, os_data)
