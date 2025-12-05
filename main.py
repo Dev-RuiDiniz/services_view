@@ -8,13 +8,14 @@ from routes.os_routes import os_router
 # Importar a função de setup do banco de dados
 from database.db_setup import create_all_tables
 # Lembrete: Importe seus modelos para que Base.metadata.create_all os reconheça
-from models import os_model # Mesmo que não usado diretamente, garante que o módulo seja carregado
+from models import os_model # Garante que a classe OrdemServico seja registrada no SQLAlchemy
 
 # --- Context Manager de Inicialização ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Função de inicialização e desligamento (startup e shutdown) da aplicação.
+    Responsável por garantir que as tabelas sejam criadas.
     """
     print("Iniciando a aplicação...")
     # 1. Chamada à função de criação de tabelas
@@ -40,6 +41,11 @@ templates = Jinja2Templates(directory="templates")
 # 3. Montagem de Arquivos Estáticos
 # Permite acessar arquivos em static/ via URL /static/...
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+# 4. Inclusão das Rotas
+# Injeta a instância 'templates' no router e o monta na aplicação
+app.include_router(os_router(templates))
 
 
 # --- Exemplo de Rota Raiz (apenas para teste inicial) ---
