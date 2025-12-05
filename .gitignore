@@ -1,0 +1,23 @@
+# Arquivos de Sistema e de Ambiente
+##################################
+.DS_Store
+.env
+.venv
+venv/
+__pycache__/
+*.pyc
+*.swp
+*~
+/logs/
+
+# Bancos de Dados
+#################
+# Se você usar um banco de dados SQLite (comum em testes ou desenvolvimento local)
+*.db
+*.sqlite
+*.sqlite3
+
+# Arquivos de IDEs (Opcional, mas recomendado)
+##############################################
+.idea/  # Para usuários do PyCharm/IntelliJ
+.vscode/ # Para usuários do VS Code
