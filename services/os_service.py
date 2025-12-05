@@ -1,7 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.os_model import OrdemServico 
-from typing import List
-from sqlalchemy import select # Importação necessária para criar a query
+from typing import List, Optional
+from sqlalchemy import select
+from uuid import UUID
 
 class OrdemServicoService:
     """
@@ -42,3 +43,28 @@ class OrdemServicoService:
         # 3. Mapeia o resultado para uma lista de objetos modelo
         # scalars() transforma os objetos 'Row' em objetos Python 'OrdemServico'
         return result.scalars().all()
+    
+    # ----------------------------------------------------
+    # NOVO: Método READ by ID
+    # ----------------------------------------------------
+    async def get_os_by_id(self, db: AsyncSession, os_id: UUID) -> Optional[OrdemServico]:
+        """
+        Busca uma única Ordem de Serviço pelo seu ID (UUID).
+
+        Argumentos:
+            db (AsyncSession): A sessão do banco de dados.
+            os_id (UUID): O ID único (UUID) da Ordem de Serviço.
+            
+        Retorna:
+            Optional[OrdemServico]: O objeto OrdemServico se encontrado, ou None.
+        """
+        # 1. Cria a instrução SELECT com filtro WHERE
+        query = select(OrdemServico).where(OrdemServico.id == os_id)
+        
+        # 2. Executa a instrução de forma assíncrona
+        result = await db.execute(query)
+        
+        # 3. Mapeia o resultado para um único objeto ou None
+        # O .one_or_none() garante que a consulta retorne no máximo um item, 
+        # ideal para busca por chave primária.
+        return result.scalars().one_or_none()
