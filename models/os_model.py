@@ -1,5 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, func
-from sqlalchemy.dialects.sqlite import UUID as SQLiteUUID
+from sqlalchemy import Column, Integer, String, Date, DateTime, func, UUID # <-- UUID importado do core
 from sqlalchemy.orm import relationship
 import uuid
 import datetime
@@ -12,9 +11,8 @@ class OrdemServico(Base):
     __tablename__ = "ordens_servico"
 
     # Campos obrigatórios e de controle
-    # ID: Chave primária, gerada automaticamente pelo banco (UUID é recomendado para sistemas distribuídos)
-    # Usamos SQLiteUUID para compatibilidade com SQLAlchemy e SQLite
-    id = Column(SQLiteUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # AGORA USA O TIPO UUID PADRÃO, que é mais estável.
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
     # Campo de negócio
     os_num = Column(String, unique=True, index=True, nullable=False)
