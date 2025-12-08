@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, func, UUID # <-- UUID importado do core
+from sqlalchemy import Column, String, Date, DateTime, func, UUID, Index # <-- Index importado
 from sqlalchemy.orm import relationship
 import uuid
 import datetime
@@ -11,29 +11,40 @@ class OrdemServico(Base):
     __tablename__ = "ordens_servico"
 
     # Campos obrigatórios e de controle
-    # AGORA USA O TIPO UUID PADRÃO, que é mais estável.
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # Campo de negócio
+    # Campo de negócio (indexado diretamente no Column)
     os_num = Column(String, unique=True, index=True, nullable=False)
     
     # Campos de descrição da Ordem de Serviço
-    tipo = Column(String, nullable=False)        # Ex: "Manutenção Corretiva", "Instalação"
-    cliente = Column(String, nullable=False)     # Nome do cliente
-    equipamento = Column(String, nullable=False) # Nome ou descrição do equipamento
+    tipo = Column(String, nullable=False) 
+    cliente = Column(String, nullable=False) # Coluna que precisa de index
+    equipamento = Column(String, nullable=False)
     
     # Campos de Data
-    data_entrada = Column(Date, default=datetime.date.today, nullable=False) # Data em que a OS foi aberta
-    prazo_entrega = Column(Date) # Prazo acordado para conclusão
+    data_entrada = Column(Date, default=datetime.date.today, nullable=False)
+    prazo_entrega = Column(Date) # Coluna que precisa de index
     
     # Campos de Status
-    # Status: Ex: "Pendente", "Em Andamento", "Concluída", "Cancelada"
-    status = Column(String, default="Pendente", nullable=False) 
+    status = Column(String, default="Pendente", nullable=False) # Coluna que precisa de index
     
     # Metadados de registro
-    # Garante que o registro da OS seja mantido com timestamp
     data_criacao = Column(DateTime, default=func.now())
     
+    
+    # ----------------------------------------------------
+    # OTIMIZAÇÃO: Argumentos de Tabela para Indexação
+    # ----------------------------------------------------
+    __table_args__ = (
+        # Índice para buscas por Cliente (usado no filtro ILIKE)
+        Index('idx_cliente', cliente), 
+        
+        # Índice para filtros de Status
+        Index('idx_status', status),
+        
+        # Índice para buscas ou ordenação por Prazo de Entrega
+        Index('idx_prazo_entrega', prazo_entrega),
+    )
     
     def __repr__(self):
         """Representação amigável do objeto para debug."""
