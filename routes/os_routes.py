@@ -39,10 +39,9 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
         # O Service Layer executa o mapeamento READ e a lógica de enriquecimento.
         ordens_servico_enriched = await os_service.get_all_os(db)
         
-        # 2. Utiliza templates.TemplateResponse para renderizar a View
+        # 2. Renderizar o template Jinja2
         return templates.TemplateResponse(
-            # Renderiza o template de listagem
-            "os_list.html", 
+            "index.html", # <-- RENDERIZAÇÃO ATUALIZADA
             {
                 "request": request,
                 "os_list": ordens_servico_enriched,
