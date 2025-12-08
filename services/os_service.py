@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select, and_, func, case, Date, cast, Integer
 from uuid import UUID
 import datetime
-from fastapi import HTTPException # Importação necessária para tratamento de erros
+from fastapi import HTTPException 
 
 class OrdemServicoService:
     """
@@ -103,13 +103,10 @@ class OrdemServicoService:
         # 2. Constrói as condições dinamicamente
         
         if status:
-            # Filtra pelo status exato.
-            # Você pode implementar lógica de "LIKE" se precisar de busca parcial.
             conditions.append(OrdemServico.status == status)
 
         if cliente:
             # Filtra por cliente, usando ILIKE para busca case-insensitive e parcial
-            # (Adicione '%' para busca contendo o termo)
             conditions.append(OrdemServico.cliente.ilike(f'%{cliente}%'))
             
         # 3. Aplica as condições à query
@@ -186,8 +183,6 @@ class OrdemServicoService:
         total_os = func.count(OrdemServico.id).label('total_os')
         
         # KPI 2: Contagem de OSs Atrasadas
-        # Uma OS é considerada ATRASADA se o prazo_entrega for passado (hoje > prazo) 
-        # E o status não for final (Concluída ou Cancelada).
         atrasadas_count = func.sum(
             case(
                 (
@@ -202,8 +197,6 @@ class OrdemServicoService:
         ).label('atrasadas_count')
         
         # KPI 3: Média de Prazo de Entrega (em dias)
-        # Calcula a diferença entre prazo_entrega e data_entrada, e tira a média.
-        # CAST é necessário para garantir que a subtração de datas resulte em um número de dias.
         media_prazo_dias = func.avg(
             cast(OrdemServico.prazo_entrega - OrdemServico.data_entrada, Integer) 
         ).label('media_prazo_dias')
@@ -214,7 +207,7 @@ class OrdemServicoService:
         result = await db.execute(query)
         
         # O resultado virá como uma tupla única
-        kpis_row = result.fetchone()
+        kpis_row = result.first() # Usando .first()
 
         if kpis_row is None:
             # Caso não haja registros na tabela, retorna zeros/Nulos
@@ -225,11 +218,17 @@ class OrdemServicoService:
             }
 
         # 3. Formata e Retorna o Dicionário de KPIs
+        # CORREÇÃO CRÍTICA: Converte o objeto Row em dicionário para garantir acesso pelos labels.
+        kpis_dict = kpis_row._asdict()
+
         kpis = {
-            "total_os": int(kpis_row.total_os),
-            "atrasadas_count": int(kpis_row.atrasadas_count),
-            # Arredonda a média para duas casas decimais, ou None se não houver dados
-            "media_prazo_dias": round(float(kpis_row.media_prazo_dias), 2) if kpis_row.media_prazo_dias is not None else None
+            # Os valores agregados são extraídos do dicionário (mais seguro)
+            "total_os": int(kpis_dict.get('total_os', 0) or 0),
+            "atrasadas_count": int(kpis_dict.get('atrasadas_count', 0) or 0),
+            
+            # Arredonda a média para duas casas decimais, ou None se não houver dados.
+            "media_prazo_dias": round(float(kpis_dict.get('media_prazo_dias')), 2) 
+                                  if kpis_dict.get('media_prazo_dias') is not None else None
         }
         
         return kpis
