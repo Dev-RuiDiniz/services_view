@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.os_model import OrdemServico 
 from typing import List, Optional, Dict, Any
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func, case, Date, cast, Integer
 from uuid import UUID
 import datetime
 from fastapi import HTTPException # Importação necessária para tratamento de erros
@@ -168,3 +168,68 @@ class OrdemServicoService:
         await db.commit()
         
         return True
+    
+    # ----------------------------------------------------
+    # NOVO: Mapeamento de Análise (KPIs)
+    # ----------------------------------------------------
+    async def get_kpis(self, db: AsyncSession) -> Dict[str, Any]:
+        """
+        Calcula e retorna três KPIs agregados da base de Ordens de Serviço:
+        1. Total de OSs.
+        2. Contagem de OSs Atrasadas (prazo_entrega < hoje E status != Concluída/Cancelada).
+        3. Média de Prazo de Entrega (em dias, desde a data de entrada).
+        """
+        
+        # 1. Definição das Expressões Agregadas
+        
+        # KPI 1: Total de OSs
+        total_os = func.count(OrdemServico.id).label('total_os')
+        
+        # KPI 2: Contagem de OSs Atrasadas
+        # Uma OS é considerada ATRASADA se o prazo_entrega for passado (hoje > prazo) 
+        # E o status não for final (Concluída ou Cancelada).
+        atrasadas_count = func.sum(
+            case(
+                (
+                    and_(
+                        OrdemServico.prazo_entrega < datetime.date.today(),
+                        OrdemServico.status.notin_(['Concluída', 'Cancelada'])
+                    ),
+                    1 # Se a condição for verdadeira, conta 1
+                ),
+                else_=0 # Senão, conta 0
+            )
+        ).label('atrasadas_count')
+        
+        # KPI 3: Média de Prazo de Entrega (em dias)
+        # Calcula a diferença entre prazo_entrega e data_entrada, e tira a média.
+        # CAST é necessário para garantir que a subtração de datas resulte em um número de dias.
+        media_prazo_dias = func.avg(
+            cast(OrdemServico.prazo_entrega - OrdemServico.data_entrada, Integer) 
+        ).label('media_prazo_dias')
+
+        # 2. Constrói e Executa a Query
+        query = select(total_os, atrasadas_count, media_prazo_dias)
+        
+        result = await db.execute(query)
+        
+        # O resultado virá como uma tupla única
+        kpis_row = result.fetchone()
+
+        if kpis_row is None:
+            # Caso não haja registros na tabela, retorna zeros/Nulos
+            return {
+                "total_os": 0,
+                "atrasadas_count": 0,
+                "media_prazo_dias": None
+            }
+
+        # 3. Formata e Retorna o Dicionário de KPIs
+        kpis = {
+            "total_os": int(kpis_row.total_os),
+            "atrasadas_count": int(kpis_row.atrasadas_count),
+            # Arredonda a média para duas casas decimais, ou None se não houver dados
+            "media_prazo_dias": round(float(kpis_row.media_prazo_dias), 2) if kpis_row.media_prazo_dias is not None else None
+        }
+        
+        return kpis
