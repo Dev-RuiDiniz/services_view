@@ -64,11 +64,9 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
     # ----------------------------------------------------
     # ROTA POST: Criação de Nova OS (CREATE)
     # ----------------------------------------------------
-    @router.post("/editar/{os_id}", name="update_os")
-    async def update_os(
-        os_id: UUID, # Captura o ID da OS a ser atualizada
+    @router.post("/novo", name="create_os")
+    async def create_os(
         db: Annotated[AsyncSession, Depends(get_db)],
-        # Captura todos os campos do formulário (devem corresponder aos nomes HTML)
         os_num: Annotated[str, Form()],
         cliente: Annotated[str, Form()],
         tipo: Annotated[str, Form()],
@@ -76,21 +74,15 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
         status: Annotated[str, Form()],
         prazo_entrega: Annotated[Optional[str], Form()] = None
     ):
-        """
-        Recebe os dados do formulário de edição, atualiza o registro no DB e redireciona.
-        """
+        """ Recebe os dados do formulário e cria um novo registro no DB. """
         
-        # 1. Pré-processamento e Validação de Datas
         prazo_date: Optional[dt_date] = None
         if prazo_entrega:
             try:
-                # Converte a string YYYY-MM-DD para objeto datetime.date
                 prazo_date = dt_date.fromisoformat(prazo_entrega)
             except ValueError:
                 raise HTTPException(status_code=400, detail="Formato de data inválido para Prazo de Entrega.")
 
-        # 2. Prepara o dicionário de dados a serem enviados para o Service Layer
-        # O Service Layer cuidará de ignorar chaves que não devem ser atualizadas (ex: id)
         os_data = {
             "os_num": os_num,
             "cliente": cliente,
@@ -100,18 +92,13 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
             "prazo_entrega": prazo_date
         }
 
-        # 3. Chama a Camada de Serviço para Persistência (UPDATE)
         try:
-            # Passa o ID e os dados para o método update_os
-            await os_service.update_os(db, os_id, os_data)
-        except HTTPException as e:
-            # Re-lança 404 se o service layer indicou que a OS não foi encontrada
-            raise e 
+            await os_service.create_os(db, os_data)
         except Exception as e:
-            print(f"Erro interno ao atualizar OS {os_id}: {e}")
-            raise HTTPException(status_code=500, detail="Falha ao atualizar a Ordem de Serviço.")
+            print(f"Erro ao criar OS: {e}")
+            raise HTTPException(status_code=500, detail="Falha ao registrar a Ordem de Serviço no banco de dados.")
 
-        # 4. Redireciona o usuário de volta para a lista após a atualização bem-sucedida
+        # Redirecionamento Pós-POST
         return RedirectResponse(
             url=router.url_path_for("list_os"), 
             status_code=status.HTTP_303_SEE_OTHER
@@ -127,31 +114,96 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
         os_id: UUID, # Captura o ID da URL
         db: Annotated[AsyncSession, Depends(get_db)]
     ):
-        """
-        Busca uma OS pelo ID e renderiza o formulário de edição pré-preenchido.
-        """
+        """ Busca uma OS pelo ID e renderiza o formulário de edição pré-preenchido. """
         
-        # 1. Busca o objeto ORM puro
         os_obj = await os_service.get_os_by_id(db, os_id)
         
-        # 2. Verifica se a OS existe
         if os_obj is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Ordem de Serviço com ID '{os_id}' não encontrada."
             )
             
-        # 3. Renderiza o template, passando o objeto OS puro
         return templates.TemplateResponse(
             "editar_os.html", 
             {
                 "request": request,
-                "os": os_obj, # Passa o objeto ORM para pré-preencher o formulário
+                "os": os_obj, # Passa o objeto ORM para pré-preencher
                 "title": f"Editar OS {os_obj.os_num}"
             }
         )
+        
+    # ----------------------------------------------------
+    # ROTA POST: Processar Edição (UPDATE)
+    # ----------------------------------------------------
+    @router.post("/editar/{os_id}", name="update_os")
+    async def update_os(
+        os_id: UUID, # ID da OS a ser atualizada
+        db: Annotated[AsyncSession, Depends(get_db)],
+        # Captura todos os campos do formulário
+        os_num: Annotated[str, Form()],
+        cliente: Annotated[str, Form()],
+        tipo: Annotated[str, Form()],
+        equipamento: Annotated[str, Form()],
+        status: Annotated[str, Form()],
+        prazo_entrega: Annotated[Optional[str], Form()] = None
+    ):
+        """ Recebe os dados do formulário de edição e atualiza o registro no DB. """
+        
+        prazo_date: Optional[dt_date] = None
+        if prazo_entrega:
+            try:
+                prazo_date = dt_date.fromisoformat(prazo_entrega)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato de data inválido para Prazo de Entrega.")
 
-    # TODO: Implementar Rota POST/PUT /os/editar/{os_id} (UPDATE - Processamento do Formulário)
-    # TODO: Implementar Rota DELETE /os/remover/{os_id} (DELETE)
+        os_data = {
+            "os_num": os_num,
+            "cliente": cliente,
+            "tipo": tipo,
+            "equipamento": equipamento,
+            "status": status,
+            "prazo_entrega": prazo_date
+        }
+
+        try:
+            await os_service.update_os(db, os_id, os_data)
+        except HTTPException as e:
+            # Re-lança 404
+            raise e 
+        except Exception as e:
+            print(f"Erro interno ao atualizar OS {os_id}: {e}")
+            raise HTTPException(status_code=500, detail="Falha ao atualizar a Ordem de Serviço.")
+
+        # Redireciona para a lista
+        return RedirectResponse(
+            url=router.url_path_for("list_os"), 
+            status_code=status.HTTP_303_SEE_OTHER
+        )
+
+    # ----------------------------------------------------
+    # ROTA POST: Exclusão de OS (DELETE)
+    # ----------------------------------------------------
+    @router.post("/deletar/{os_id}", name="delete_os")
+    async def delete_os(
+        os_id: UUID, # ID da OS a ser deletada
+        db: Annotated[AsyncSession, Depends(get_db)],
+    ):
+        """ Remove um registro do banco de dados e redireciona. """
+        
+        try:
+            await os_service.delete_os(db, os_id)
+        except HTTPException as e:
+            # Re-lança 404
+            raise e
+        except Exception as e:
+            print(f"Erro interno ao deletar OS {os_id}: {e}")
+            raise HTTPException(status_code=500, detail="Falha ao remover a Ordem de Serviço.")
+
+        # Redirecionamento Pós-DELETE
+        return RedirectResponse(
+            url=router.url_path_for("list_os"), 
+            status_code=status.HTTP_303_SEE_OTHER
+        )
 
     return router
