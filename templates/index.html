@@ -5,145 +5,94 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='main.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        /* Estilos Básicos */
-        body { font-family: 'Roboto', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
-        .container { background: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
-        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
-        
-        /* Estilos de Tabela (Omitidos para brevidade, mas devem estar presentes) */
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #007bff; color: white; font-weight: 700; text-transform: uppercase; }
-        .delete-form { display: inline; }
-        .btn-delete { background: none; border: none; color: #dc3545; cursor: pointer; padding: 0; margin-left: 5px; font-size: 1em; text-decoration: underline; }
-        
-        /* Estilos do Formulário de Filtro */
-        .filter-form {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 25px;
-            padding: 15px;
-            background-color: #e9ecef;
-            border-radius: 6px;
-        }
-        .filter-group {
-            display: flex;
-            flex-direction: column;
-        }
-        .filter-group label {
-            font-weight: 700;
-            color: #495057;
-            margin-bottom: 5px;
-            font-size: 0.9em;
-        }
-        .filter-form input, .filter-form select {
-            padding: 8px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            min-width: 150px;
-        }
-        .btn-filter, .btn-clear {
-            padding: 8px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            align-self: flex-end; /* Alinha o botão com os campos de entrada */
-            font-weight: 700;
-        }
-        .btn-filter {
-            background-color: #007bff;
-            color: white;
-        }
-        .btn-clear {
-            background-color: #6c757d;
-            color: white;
-            text-decoration: none; /* Se for um link */
-        }
-    </style>
 </head>
 <body>
     <div class="container">
         <h1>🛠️ {{ title }}</h1>
-        <p>Dashboard: Lista de Ordens de Serviço Ativas</p>
+        <p>
+            Gerencie e acompanhe o status de todas as Ordens de Serviço.
+        </p>
+        
+        <div class="action-buttons">
+            <a href="{{ url_for('new_os_form') }}" class="button primary">➕ Nova Ordem de Serviço</a>
+            <a href="{{ url_for('dashboard_view') }}" class="button secondary">📊 Ver Dashboard</a>
+        </div>
 
-        <form class="filter-form" method="GET" action="{{ url_for('list_os') }}">
+        <form method="GET" action="{{ url_for('list_os') }}" class="filter-form">
             
-            <div class="filter-group">
-                <label for="status">Filtrar por Status:</label>
-                <select id="status" name="status">
-                    <option value="" {% if request.args.get('status') == '' or request.args.get('status') is none %}selected{% endif %}>-- Todos --</option>
-                    
-                    {% set current_status = request.args.get('status') %}
-                    <option value="Pendente" {% if current_status == "Pendente" %}selected{% endif %}>Pendente</option>
-                    <option value="Em Andamento" {% if current_status == "Em Andamento" %}selected{% endif %}>Em Andamento</option>
-                    <option value="Aguardando Peças" {% if current_status == "Aguardando Peças" %}selected{% endif %}>Aguardando Peças</option>
-                    <option value="ATRASADO" {% if current_status == "ATRASADO" %}selected{% endif %}>ATRASADO</option>
-                    <option value="Concluída" {% if current_status == "Concluída" %}selected{% endif %}>Concluída</option>
-                    <option value="Cancelada" {% if current_status == "Cancelada" %}selected{% endif %}>Cancelada</option>
-                </select>
-            </div>
+            <label for="status">Filtrar por Status:</label>
+            <select id="status" name="status">
+                
+                {% set current_status = request.query_params.get('status') %}
 
-            <div class="filter-group">
-                <label for="cliente">Buscar Cliente:</label>
-                <input type="text" id="cliente" name="cliente" 
-                       value="{{ request.args.get('cliente') if request.args.get('cliente') is not none }}" 
-                       placeholder="Nome ou parte do nome">
-            </div>
+                <option value="" {% if current_status == '' or current_status is none %}selected{% endif %}>-- Todos --</option>
+                <option value="Pendente" {% if current_status == "Pendente" %}selected{% endif %}>Pendente</option>
+                <option value="Em Andamento" {% if current_status == "Em Andamento" %}selected{% endif %}>Em Andamento</option>
+                <option value="Aguardando Peça" {% if current_status == "Aguardando Peça" %}selected{% endif %}>Aguardando Peça</option>
+                <option value="ATRASADO" {% if current_status == "ATRASADO" %}selected{% endif %}>ATRASADO</option>
+                <option value="Concluída" {% if current_status == "Concluída" %}selected{% endif %}>Concluída</option>
+                <option value="Cancelada" {% if current_status == "Cancelada" %}selected{% endif %}>Cancelada</option>
+            </select>
 
-            <button type="submit" class="btn-filter">Filtrar</button>
-            
-            <a href="{{ url_for('list_os') }}" class="btn btn-clear">Limpar Filtros</a>
+            <label for="cliente">Buscar Cliente:</label>
+            <input type="text" id="cliente" name="cliente" 
+                   value="{{ request.query_params.get('cliente') if request.query_params.get('cliente') is not none else '' }}" 
+                   placeholder="Nome ou parte do nome">
+
+            <button type="submit" class="button filter">Filtrar</button>
+            <a href="{{ url_for('list_os') }}" class="button default">Limpar Filtros</a>
         </form>
 
         {% if os_list %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Nº OS</th>
-                        <th>Cliente</th>
-                        <th>Equipamento</th>
-                        <th>Entrada</th>
-                        <th>Prazo</th>
-                        <th>Status</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for os in os_list %}
-                    <tr>
-                        <td>{{ os.os_num }}</td>
-                        <td>{{ os.cliente }}</td>
-                        <td>{{ os.equipamento }}</td>
-                        <td>{{ os.data_entrada_formatada }}</td>
-                        <td>{{ os.prazo_entrega_formatado if os.prazo_entrega_formatada else 'N/A' }}</td>
-                        <td>
-                            {% set status_class = os.status_calculado.replace(' ', '-').replace('DO-PRAZO', '') %}
-                            <span class="status-badge status-{{ status_class }}">
-                                {{ os.status_calculado }}
-                            </span>
-                        </td>
-                        <td>
-                            <a href="{{ url_for('edit_os_form', os_id=os.id) }}" style="color: #ffc107;">Editar</a>
-                            |
-                            <form class="delete-form" method="POST" action="{{ url_for('delete_os', os_id=os.id) }}" 
-                                onsubmit="return confirm('Tem certeza que deseja deletar a OS #{{ os.os_num }}?');">
-                                
-                                <button type="submit" class="btn-delete">Deletar</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <table>
+            <thead>
+                <tr>
+                    <th>OS #</th>
+                    <th>Cliente</th>
+                    <th>Tipo</th>
+                    <th>Equipamento</th>
+                    <th>Data Entrada</th>
+                    <th>Prazo Entrega</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for os in os_list %}
+                <tr class="status-{{ os.status | lower | replace(' ', '-') }}">
+                    <td>{{ os.os_num }}</td>
+                    <td>{{ os.cliente }}</td>
+                    <td>{{ os.tipo }}</td>
+                    <td>{{ os.equipamento }}</td>
+                    <td>{{ os.data_entrada }}</td>
+                    <td>
+                        {% if os.prazo_entrega %}
+                            {{ os.prazo_entrega }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="status-badge status-{{ os.status | lower | replace(' ', '-') }}">
+                            {{ os.status }}
+                        </span>
+                    </td>
+                    <td class="action-cell">
+                        <a href="{{ url_for('edit_os_form', os_id=os.id) }}" class="icon-button edit" title="Editar">✏️</a>
+                        
+                        <form method="POST" action="{{ url_for('delete_os', os_id=os.id) }}" 
+                              onsubmit="return confirm('Tem certeza que deseja deletar a OS {{ os.os_num }}?');" 
+                              style="display:inline;">
+                            <button type="submit" class="icon-button delete" title="Deletar">🗑️</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         {% else %}
-            <p>Nenhuma Ordem de Serviço encontrada. Crie uma nova para começar!</p>
+        <p class="no-results">Nenhuma Ordem de Serviço encontrada. Crie uma nova ou ajuste os filtros.</p>
         {% endif %}
-
-        <div style="margin-top: 30px;">
-            <a href="{{ url_for('new_os_form') }}" style="text-decoration: none; padding: 10px 15px; background-color: #28a745; color: white; border-radius: 5px;">+ Nova OS</a>
-        </div>
     </div>
 </body>
 </html>

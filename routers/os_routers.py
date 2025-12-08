@@ -33,9 +33,9 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
     async def list_all_os(
         request: Request,
         db: Annotated[AsyncSession, Depends(get_db)],
-        # Captura filtros da Query String da URL
-        status: Annotated[Optional[str], Query(None)] = None,
-        cliente: Annotated[Optional[str], Query(None)] = None
+        # Captura filtros da Query String da URL (Corrigido para o padrão FastAPI)
+        status: Optional[str] = None,
+        cliente: Optional[str] = None
     ):
         """ 
         Busca todas as Ordens de Serviço, aplicando filtros recebidos via URL, 
@@ -70,12 +70,11 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
         """
         Busca os KPIs agregados e renderiza o template do dashboard.
         """
-        # 1. Obter os dados de KPIs do serviço
+        # 1. Obter os dados de KPIs (Total, Atrasados, Média)
         kpis_data = await os_service.get_kpis(db) 
 
         # 2. Mapeamento das contagens para o formato esperado pelo template (os_counts)
-        # O dashboard.html utiliza os_counts para alguns cartões.
-        # Pendente e Concluída não foram calculados na query agregada, simulamos 0 por enquanto.
+        # Notas: 'Pendente' e 'Concluída' estão simulados como 0, pois o get_kpis() atual não os calcula.
         os_counts = {
             "total": kpis_data.get("total_os", 0),
             "ATRASADO": kpis_data.get("atrasadas_count", 0),
@@ -89,7 +88,7 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
             "title": "Dashboard",
             "os_counts": os_counts,
             "media_prazo_dias": kpis_data.get("media_prazo_dias"),
-            "kpis_data": kpis_data # Passa o dicionário completo para uso futuro
+            "kpis_data": kpis_data # Passa o dicionário completo
         }
 
         # 4. Renderizar o template
