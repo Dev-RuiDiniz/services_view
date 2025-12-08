@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.os_model import OrdemServico 
 from typing import List, Optional, Dict, Any
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from uuid import UUID
 import datetime
 from fastapi import HTTPException # Importação necessária para tratamento de erros
@@ -80,14 +80,48 @@ class OrdemServicoService:
         return novo_os
 
     # ----------------------------------------------------
-    # Mapeamento READ All
+    # Mapeamento READ All com Filtros
     # ----------------------------------------------------
-    async def get_all_os(self, db: AsyncSession) -> List[Dict[str, Any]]:
-        """ Busca todas as Ordens de Serviço e retorna-as enriquecidas. """
+    async def get_all_os(
+        self, 
+        db: AsyncSession,
+        # NOVOS PARÂMETROS OPCIONAIS
+        status: Optional[str] = None, 
+        cliente: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """ 
+        Busca todas as Ordens de Serviço, aplicando filtros dinâmicos de status e cliente. 
+        Retorna a lista de dicionários enriquecidos.
+        """
+        
+        # 1. Inicia a query básica
         query = select(OrdemServico)
+        
+        # Lista para armazenar as condições de filtro
+        conditions = []
+        
+        # 2. Constrói as condições dinamicamente
+        
+        if status:
+            # Filtra pelo status exato.
+            # Você pode implementar lógica de "LIKE" se precisar de busca parcial.
+            conditions.append(OrdemServico.status == status)
+
+        if cliente:
+            # Filtra por cliente, usando ILIKE para busca case-insensitive e parcial
+            # (Adicione '%' para busca contendo o termo)
+            conditions.append(OrdemServico.cliente.ilike(f'%{cliente}%'))
+            
+        # 3. Aplica as condições à query
+        if conditions:
+            # Usa 'and_' para combinar todas as condições com lógica AND
+            query = query.where(and_(*conditions))
+
+        # 4. Executa a query
         result = await db.execute(query)
         os_list = result.scalars().all()
-        # Aplica a lógica de enriquecimento
+        
+        # 5. Aplica a lógica de enriquecimento
         return self._enrich_os_data(os_list)
     
     # ----------------------------------------------------
