@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Request, Form, HTTPException, status, Query
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated, Optional
@@ -18,7 +18,8 @@ os_service = OrdemServicoService()
 
 def os_router(templates: Jinja2Templates) -> APIRouter:
     """
-    Configura e retorna o APIRouter para as rotas de Ordem de Serviço.
+    Configura e retorna o APIRouter para as rotas de Ordem de Serviço,
+    incluindo CRUD e filtragem.
     """
     router = APIRouter(
         prefix="/os",
@@ -26,17 +27,29 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
     )
 
     # ----------------------------------------------------
-    # ROTA GET: Listar todas as OSs (READ All - VIEW)
+    # ROTA GET: Listar todas as OSs com Filtros (READ All - VIEW)
     # ----------------------------------------------------
     @router.get("/", name="list_os")
     async def list_all_os(
         request: Request,
-        db: Annotated[AsyncSession, Depends(get_db)]
+        db: Annotated[AsyncSession, Depends(get_db)],
+        # Captura filtros da Query String da URL
+        status: Annotated[Optional[str], Query(None)] = None,
+        cliente: Annotated[Optional[str], Query(None)] = None
     ):
-        """ Busca todas as Ordens de Serviço, aplica enriquecimento e renderiza a view index.html. """
+        """ 
+        Busca todas as Ordens de Serviço, aplicando filtros recebidos via URL, 
+        e renderiza a view index.html. 
+        """
         
-        ordens_servico_enriched = await os_service.get_all_os(db)
+        # Chama a Camada de Serviço, passando os filtros
+        ordens_servico_enriched = await os_service.get_all_os(
+            db, 
+            status=status, 
+            cliente=cliente
+        )
         
+        # Renderiza o template de listagem
         return templates.TemplateResponse(
             "index.html", 
             {
