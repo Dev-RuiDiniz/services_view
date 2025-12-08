@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} - Editar OS</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='main.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos básicos do formulário (semelhante ao nova_os.html) */
+        body { font-family: 'Roboto', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { background: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); max-width: 600px; margin: 0 auto; }
+        h1 { color: #333; border-bottom: 2px solid #ffc107; padding-bottom: 10px; margin-bottom: 20px; }
+        label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: 700; color: #555; }
+        input[type="text"], input[type="date"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .form-actions {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 700;
+            text-decoration: none;
+            text-align: center;
+        }
+        .btn-submit {
+            background-color: #ffc107; /* Amarelo/Laranja */
+            color: #333;
+        }
+        .btn-cancel {
+            background-color: #6c757d; /* Cinza */
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✏️ Editar Ordem de Serviço #{{ os.os_num }}</h1>
+        <p>ID do Registro: **{{ os.id }}**</p>
+
+        <form method="POST" action="{{ url_for('update_os', os_id=os.id) }}">
+
+            <label for="os_num">Número da OS:</label>
+            <input type="text" id="os_num" name="os_num" value="{{ os.os_num }}" required>
+
+            <label for="cliente">Cliente:</label>
+            <input type="text" id="cliente" name="cliente" value="{{ os.cliente }}" required>
+
+            <label for="tipo">Tipo:</label>
+            <select id="tipo" name="tipo" required>
+                <option value="Manutenção" {% if os.tipo == "Manutenção" %}selected{% endif %}>Manutenção</option>
+                <option value="Instalação" {% if os.tipo == "Instalação" %}selected{% endif %}>Instalação</option>
+                <option value="Orçamento" {% if os.tipo == "Orçamento" %}selected{% endif %}>Orçamento</option>
+                <option value="Outro" {% if os.tipo == "Outro" %}selected{% endif %}>Outro</option>
+            </select>
+
+            <label for="equipamento">Equipamento:</label>
+            <input type="text" id="equipamento" name="equipamento" value="{{ os.equipamento }}" required>
+            
+            <label for="prazo_entrega">Prazo de Entrega:</label>
+            {% set prazo_iso = os.prazo_entrega.isoformat() if os.prazo_entrega else '' %}
+            <input type="date" id="prazo_entrega" name="prazo_entrega" value="{{ prazo_iso }}">
+
+            <label for="status">Status Atual:</label>
+            <select id="status" name="status">
+                <option value="Pendente" {% if os.status == "Pendente" %}selected{% endif %}>Pendente</option>
+                <option value="Em Andamento" {% if os.status == "Em Andamento" %}selected{% endif %}>Em Andamento</option>
+                <option value="Aguardando Peças" {% if os.status == "Aguardando Peças" %}selected{% endif %}>Aguardando Peças</option>
+                <option value="Concluída" {% if os.status == "Concluída" %}selected{% endif %}>Concluída</option>
+                <option value="Cancelada" {% if os.status == "Cancelada" %}selected{% endif %}>Cancelada</option>
+            </select>
+            
+            <div class="form-actions">
+                <a href="{{ url_for('list_os') }}" class="btn btn-cancel">Cancelar</a>
+                <button type="submit" class="btn btn-submit">Salvar Alterações</button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
