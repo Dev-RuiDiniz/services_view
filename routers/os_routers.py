@@ -12,14 +12,14 @@ from database.db_setup import get_db
 # Importa a Camada de Serviço
 from services.os_service import OrdemServicoService
 
-# Cria uma instância do Service Layer
+# Cria uma instância global do Service Layer (reutilizável)
 os_service = OrdemServicoService()
 
 
 def os_router(templates: Jinja2Templates) -> APIRouter:
     """
     Configura e retorna o APIRouter para as rotas de Ordem de Serviço,
-    incluindo CRUD e filtragem.
+    incluindo CRUD, filtragem e Dashboard.
     """
     router = APIRouter(
         prefix="/os",
@@ -58,6 +58,43 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
                 "title": "Lista de Ordens de Serviço"
             }
         )
+        
+    # ----------------------------------------------------
+    # ROTA GET: Painel de Controle (DASHBOARD)
+    # ----------------------------------------------------
+    @router.get("/dashboard", name="dashboard_view")
+    async def dashboard_view(
+        request: Request,
+        db: Annotated[AsyncSession, Depends(get_db)],
+    ):
+        """
+        Busca os KPIs agregados e renderiza o template do dashboard.
+        """
+        # 1. Obter os dados de KPIs do serviço
+        kpis_data = await os_service.get_kpis(db) 
+
+        # 2. Mapeamento das contagens para o formato esperado pelo template (os_counts)
+        # O dashboard.html utiliza os_counts para alguns cartões.
+        # Pendente e Concluída não foram calculados na query agregada, simulamos 0 por enquanto.
+        os_counts = {
+            "total": kpis_data.get("total_os", 0),
+            "ATRASADO": kpis_data.get("atrasadas_count", 0),
+            "Pendente": 0, 
+            "Concluída": 0 
+        }
+        
+        # 3. Preparar o contexto para o template
+        context = {
+            "request": request,
+            "title": "Dashboard",
+            "os_counts": os_counts,
+            "media_prazo_dias": kpis_data.get("media_prazo_dias"),
+            "kpis_data": kpis_data # Passa o dicionário completo para uso futuro
+        }
+
+        # 4. Renderizar o template
+        return templates.TemplateResponse("dashboard.html", context)
+
 
     # ----------------------------------------------------
     # ROTA GET: Formulário de Nova OS (VIEW)

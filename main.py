@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import uvicorn
 from fastapi.templating import Jinja2Templates 
-from routes.os_routes import os_router
+from routers.os_routers import os_router
 
 # Importar a função de setup do banco de dados
 from database.db_setup import create_all_tables
