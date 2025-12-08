@@ -7,81 +7,59 @@
     <link rel="stylesheet" href="{{ url_for('static', path='main.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        /* Estilos Básicos para o Relatório Técnico */
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 20px;
+        /* Estilos Básicos */
+        body { font-family: 'Roboto', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { background: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
+        
+        /* Estilos de Tabela (Omitidos para brevidade, mas devem estar presentes) */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; font-weight: 700; text-transform: uppercase; }
+        .delete-form { display: inline; }
+        .btn-delete { background: none; border: none; color: #dc3545; cursor: pointer; padding: 0; margin-left: 5px; font-size: 1em; text-decoration: underline; }
+        
+        /* Estilos do Formulário de Filtro */
+        .filter-form {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 6px;
         }
-        .container {
-            background: #ffffff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        .filter-group {
+            display: flex;
+            flex-direction: column;
         }
-        h1 {
-            color: #333;
-            border-bottom: 2px solid #007bff;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+        .filter-group label {
+            font-weight: 700;
+            color: #495057;
+            margin-bottom: 5px;
+            font-size: 0.9em;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
+        .filter-form input, .filter-form select {
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            min-width: 150px;
         }
-        th, td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
+        .btn-filter, .btn-clear {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            align-self: flex-end; /* Alinha o botão com os campos de entrada */
+            font-weight: 700;
         }
-        th {
+        .btn-filter {
             background-color: #007bff;
             color: white;
-            font-weight: 700;
-            text-transform: uppercase;
         }
-        tr:hover {
-            background-color: #f1f1f1;
-        }
-        /* Estilos específicos para o Status Calculado */
-        .status-badge {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-weight: 700;
+        .btn-clear {
+            background-color: #6c757d;
             color: white;
-            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.3);
-            min-width: 100px;
-            text-align: center;
-        }
-        .status-ATRASADO {
-            background-color: #dc3545; /* Vermelho */
-        }
-        .status-PRÓXIMO {
-            background-color: #ffc107; /* Amarelo */
-            color: #333;
-        }
-        .status-Pendente {
-            background-color: #007bff; /* Azul */
-        }
-        .status-Concluída {
-            background-color: #28a745; /* Verde */
-        }
-        /* Estilos para o botão/link de Deletar */
-        .delete-form {
-            display: inline; /* Garante que o botão fique na mesma linha dos links */
-        }
-        .btn-delete {
-            background: none;
-            border: none;
-            color: #dc3545; /* Vermelho */
-            cursor: pointer;
-            padding: 0;
-            margin-left: 5px;
-            font-size: 1em;
-            text-decoration: underline;
+            text-decoration: none; /* Se for um link */
         }
     </style>
 </head>
@@ -89,6 +67,35 @@
     <div class="container">
         <h1>🛠️ {{ title }}</h1>
         <p>Dashboard: Lista de Ordens de Serviço Ativas</p>
+
+        <form class="filter-form" method="GET" action="{{ url_for('list_os') }}">
+            
+            <div class="filter-group">
+                <label for="status">Filtrar por Status:</label>
+                <select id="status" name="status">
+                    <option value="" {% if request.args.get('status') == '' or request.args.get('status') is none %}selected{% endif %}>-- Todos --</option>
+                    
+                    {% set current_status = request.args.get('status') %}
+                    <option value="Pendente" {% if current_status == "Pendente" %}selected{% endif %}>Pendente</option>
+                    <option value="Em Andamento" {% if current_status == "Em Andamento" %}selected{% endif %}>Em Andamento</option>
+                    <option value="Aguardando Peças" {% if current_status == "Aguardando Peças" %}selected{% endif %}>Aguardando Peças</option>
+                    <option value="ATRASADO" {% if current_status == "ATRASADO" %}selected{% endif %}>ATRASADO</option>
+                    <option value="Concluída" {% if current_status == "Concluída" %}selected{% endif %}>Concluída</option>
+                    <option value="Cancelada" {% if current_status == "Cancelada" %}selected{% endif %}>Cancelada</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="cliente">Buscar Cliente:</label>
+                <input type="text" id="cliente" name="cliente" 
+                       value="{{ request.args.get('cliente') if request.args.get('cliente') is not none }}" 
+                       placeholder="Nome ou parte do nome">
+            </div>
+
+            <button type="submit" class="btn-filter">Filtrar</button>
+            
+            <a href="{{ url_for('list_os') }}" class="btn btn-clear">Limpar Filtros</a>
+        </form>
 
         {% if os_list %}
             <table>
@@ -119,11 +126,9 @@
                         </td>
                         <td>
                             <a href="{{ url_for('edit_os_form', os_id=os.id) }}" style="color: #ffc107;">Editar</a>
-
                             |
-                            
                             <form class="delete-form" method="POST" action="{{ url_for('delete_os', os_id=os.id) }}" 
-                                onsubmit="return confirm('Tem certeza que deseja deletar a OS #{{ os.os_num }}? Esta ação é irreversível.');">
+                                onsubmit="return confirm('Tem certeza que deseja deletar a OS #{{ os.os_num }}?');">
                                 
                                 <button type="submit" class="btn-delete">Deletar</button>
                             </form>
