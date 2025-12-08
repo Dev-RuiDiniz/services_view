@@ -4,57 +4,133 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select
 from uuid import UUID
 import datetime
-# Adicionando o HTTPException para indicar erro de objeto não encontrado (boa prática)
-from fastapi import HTTPException 
+from fastapi import HTTPException # Importação necessária para tratamento de erros
 
 class OrdemServicoService:
-    # ... (Métodos CREATE, READ All e Auxiliares omitidos)
+    """
+    Serviços de Ordem de Serviço. Contém a lógica de negócio e mapeamento CRUD assíncrono.
+    """
+    
+    # ----------------------------------------------------
+    # MÉTODOS AUXILIARES DE ENRIQUECIMENTO DE DADOS (Síncronos)
+    # ----------------------------------------------------
+    
+    def _calculate_status(self, os: OrdemServico) -> str:
+        """
+        Calcula e retorna um status customizado baseado na data de prazo.
+        """
+        # Se a OS já está concluída ou cancelada, não precisa calcular.
+        if os.status in ["Concluída", "Cancelada"]:
+            return os.status
+        
+        if os.prazo_entrega is not None:
+            hoje = datetime.date.today()
+            diferenca = (os.prazo_entrega - hoje).days
 
+            if diferenca < 0:
+                return "ATRASADO"
+            elif diferenca <= 3:
+                return "PRÓXIMO DO PRAZO"
+        
+        return os.status # Retorna o status original se nenhuma regra se aplicar
+    
+    
+    def _format_date(self, date_orm: Optional[datetime.date]) -> Optional[str]:
+        """
+        Formata um objeto datetime.date/datetime.datetime em uma string amigável.
+        """
+        if date_orm:
+            # Formato brasileiro: dd/mm/YYYY
+            return date_orm.strftime('%d/%m/%Y')
+        return None
+    
+    
+    def _enrich_os_data(self, os_list: List[OrdemServico]) -> List[Dict[str, Any]]:
+        """
+        Transforma a lista de objetos ORM em uma lista de dicionários enriquecidos
+        com status calculado e datas formatadas.
+        """
+        enriched_list = []
+        for os in os_list:
+            # Cria um dicionário a partir dos atributos do objeto ORM
+            os_dict = os.__dict__.copy()
+            
+            # Limpeza e conversão de tipos para serialização (JSON ou View)
+            os_dict.pop('_sa_instance_state', None) # Remove metadados do SQLAlchemy
+            os_dict['id'] = str(os_dict['id']) # Converte UUID para string
+            
+            # Adiciona a lógica de enriquecimento
+            os_dict['status_calculado'] = self._calculate_status(os)
+            os_dict['data_entrada_formatada'] = self._format_date(os.data_entrada)
+            os_dict['prazo_entrega_formatado'] = self._format_date(os.prazo_entrega)
+            
+            enriched_list.append(os_dict)
+        return enriched_list
+    
+    
+    # ----------------------------------------------------
+    # Mapeamento CREATE
+    # ----------------------------------------------------
+    async def create_os(self, db: AsyncSession, os_data: dict) -> OrdemServico:
+        """ Cria uma nova Ordem de Serviço. """
+        novo_os = OrdemServico(**os_data)
+        db.add(novo_os)
+        await db.commit()
+        await db.refresh(novo_os) 
+        return novo_os
+
+    # ----------------------------------------------------
+    # Mapeamento READ All
+    # ----------------------------------------------------
+    async def get_all_os(self, db: AsyncSession) -> List[Dict[str, Any]]:
+        """ Busca todas as Ordens de Serviço e retorna-as enriquecidas. """
+        query = select(OrdemServico)
+        result = await db.execute(query)
+        os_list = result.scalars().all()
+        # Aplica a lógica de enriquecimento
+        return self._enrich_os_data(os_list)
+    
+    # ----------------------------------------------------
+    # Mapeamento READ by ID
+    # ----------------------------------------------------
     async def get_os_by_id(self, db: AsyncSession, os_id: UUID) -> Optional[OrdemServico]:
-        """
-        Busca uma única Ordem de Serviço pelo seu ID (UUID) e retorna o objeto ORM puro.
-        """
+        """ Busca uma única Ordem de Serviço pelo seu ID. """
         query = select(OrdemServico).where(OrdemServico.id == os_id)
         result = await db.execute(query)
+        # Retorna o objeto ORM puro ou None
         return result.scalars().one_or_none()
         
     # ----------------------------------------------------
-    # NOVO: Método UPDATE
+    # Mapeamento UPDATE
     # ----------------------------------------------------
     async def update_os(self, db: AsyncSession, os_id: UUID, os_data: Dict[str, Any]) -> OrdemServico:
-        """
-        Busca uma OS pelo ID, atualiza seus atributos e persiste as mudanças.
-
-        Argumentos:
-            db (AsyncSession): A sessão do banco de dados injetada.
-            os_id (UUID): O ID da Ordem de Serviço a ser atualizada.
-            os_data (dict): Dicionário contendo os dados a serem atualizados.
-            
-        Retorna:
-            OrdemServico: A instância do objeto após a atualização.
-        """
-        # 1. Busca o objeto existente usando o método já implementado (READ by ID)
+        """ Busca a OS, atualiza seus atributos e persiste as mudanças. """
         os_existente = await self.get_os_by_id(db, os_id)
         
-        # 2. Verifica se a OS foi encontrada
         if not os_existente:
-            # Lançamos uma exceção que o FastAPI irá capturar e transformar em resposta HTTP 404
             raise HTTPException(status_code=404, detail=f"Ordem de Serviço com ID '{os_id}' não encontrada.")
             
-        # 3. Atualiza os atributos do objeto com os novos dados
-        # Iteramos sobre os dados fornecidos, garantindo que o ID não seja sobrescrito.
-        # Note que os_data deve conter as chaves do modelo (ex: 'os_num', 'cliente').
         for key, value in os_data.items():
-            # Evita tentar atualizar o ID, a data de criação ou a data de entrada 
-            # se não estiver explicitamente permitido pela lógica de negócio.
-            if key not in ['id', 'data_criacao', 'data_entrada'] and hasattr(os_existente, key):
+            # Atualiza apenas os atributos permitidos
+            if key not in ['id', 'data_criacao'] and hasattr(os_existente, key):
                 setattr(os_existente, key, value)
                 
-        # 4. Executa o commit assíncrono para persistir no banco.
-        # O SQLAlchemy detecta automaticamente as mudanças no objeto 'os_existente'.
         await db.commit()
-        
-        # 5. Atualiza a instância para refletir quaisquer mudanças automáticas do banco (ex: triggers)
         await db.refresh(os_existente)
         
         return os_existente
+
+    # ----------------------------------------------------
+    # Mapeamento DELETE
+    # ----------------------------------------------------
+    async def delete_os(self, db: AsyncSession, os_id: UUID) -> bool:
+        """ Busca uma OS pelo ID e a remove do banco de dados. """
+        os_existente = await self.get_os_by_id(db, os_id)
+        
+        if not os_existente:
+            raise HTTPException(status_code=404, detail=f"Ordem de Serviço com ID '{os_id}' não encontrada.")
+            
+        await db.delete(os_existente)
+        await db.commit()
+        
+        return True
