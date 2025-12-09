@@ -1,0 +1,39 @@
+services_view
+├── .gitignore             # Regras para ignorar arquivos de controle e DB (db.sqlite)
+├── db.sqlite              # Banco de dados SQLite (local)
+├── main.py                # Ponto de entrada da aplicação
+├── requeriments.txt
+|
+|
+├── database/
+│   |── __init__.py
+│   └── db_setup.py        # Configuração do SQLAlchemy Assíncrono (Engine, SessionFactory, Base        Declarativa, Dependência 'get_db', e função create_all_tables)
+|
+├── models/
+│   |── __init__.py
+│   └── os_model.py        # Modelos de Dados (SQLAlchemy ORM Model) para 'OrdemServico' e definição de índices de otimização
+|
+├── services/
+│   |── __init__.py
+│   └── os_service.py      # Camada de Serviço (Business Logic)
+│                          # - Lógica de negócio (ex: cálculo de 'status_calculado')
+│                          # - Funções de CRUD assíncronas (select, insert, update, delete)
+│                          # - Funções de agregação para Dashboards (get_status_distribution, get_os_by_month)
+|
+├── routers/
+│   |── __init__.py
+│   └── os_routers.py      # Camada de Apresentação (View/Controller)
+│                          # - Definição de rotas HTTP (GET, POST)
+│                          # - Lógica de tratamento de requisição (Form, Query Params)
+│                          # - Renderização de Templates (Jinja2) e Redirecionamentos
+│                          # - Interação com a Camada de Serviço (os_service)
+├── static/
+│   |── __init__.py
+│   └── main.css           # (Você tem main.css na raiz, mas a convenção do FastAPI/StaticFiles é geralmente ter uma pasta 'static')
+├── templates/
+│   ├── index.html         # Template de Listagem de OSs (Versão antiga/alternativa)
+│   ├── os_list.html       # Template de Listagem/Relatório Principal de OSs
+│   ├── nova_os.html       # Template de Criação de Nova OS
+│   ├── editar_os.html     # Template de Edição de OS
+│   └── dashboard.html     # Template do Dashboard (Integração com Altair/Vega-Embed)
+└── venv/                  # Ambiente virtual (ignorado pelo .gitignore)
