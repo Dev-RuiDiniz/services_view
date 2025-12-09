@@ -54,6 +54,38 @@ def create_status_distribution_chart(data: Dict[str, int]) -> str:
     # Retorna a especificação do gráfico em JSON
     return chart.to_json()
 
+def create_monthly_trend_chart(data: List[Dict[str, Any]]) -> str:
+    """
+    Cria um gráfico de linhas Altair a partir da contagem de OSs por mês.
+    Retorna a especificação do gráfico em formato JSON.
+    """
+    if not data:
+        return "{}"
+
+    # Converter lista de dicts para DataFrame
+    df = pd.DataFrame(data)
+    
+    # Adicionar o dia '01' para converter a string 'YYYY-MM' em um objeto datetime
+    # Isso garante que o Altair trate o eixo X como temporal (T)
+    df['mes_dt'] = pd.to_datetime(df['mes'] + '-01')
+
+    chart = alt.Chart(df).mark_line(point=True, color='#007bff').encode(
+        # X: Usar a coluna datetime (Tipo T de Temporal)
+        x=alt.X(
+            'mes_dt:T', 
+            title='Mês de Entrada', 
+            # Formato de exibição do eixo
+            axis=alt.Axis(format='%Y-%m')
+        ), 
+        # Y: Contagem (Tipo Q de Quantitativo)
+        y=alt.Y('count:Q', title='Novas OSs Registradas'),
+        tooltip=[alt.Tooltip('mes', title='Mês'), alt.Tooltip('count', title='Contagem')]
+    ).properties(
+        title="Tendência de Entrada de Ordens de Serviço (Mensal)"
+    ).interactive() # Permite zoom e pan
+
+    # Retorna a especificação do gráfico em JSON
+    return chart.to_json()
 
 # ----------------------------------------------------
 # FUNÇÃO DE CONFIGURAÇÃO PRINCIPAL DO ROUTER
@@ -116,25 +148,24 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
         # 1. Obter os dados de KPIs (Total, Atrasados, Média)
         kpis_data = await os_service.get_kpis(db) 
         
-        # 2. Obter a distribuição de status para o gráfico
+        # 2. Obter a distribuição de status para o gráfico (Gráfico de Barras)
         status_distribution = await os_service.get_status_distribution(db)
-        
-        # 3. Gerar o JSON do gráfico de distribuição
         status_chart_spec_json = create_status_distribution_chart(status_distribution)
         
-        # 4. Obter a tendência por mês (próxima tarefa)
+        # 3. Obter a tendência por mês (Gráfico de Linhas)
         os_by_month_data = await os_service.get_os_by_month(db)
+        trend_chart_spec_json = create_monthly_trend_chart(os_by_month_data) # NOVO
         
-        # 5. Preparar o contexto para o template
+        # 4. Preparar o contexto para o template
         context = {
             "request": request,
             "title": "Dashboard de Análise de OS",
-            "kpis": kpis_data, # Dicionário completo de KPIs
-            "status_chart_spec": status_chart_spec_json, # JSON do gráfico de distribuição
-            "os_by_month_data": os_by_month_data # Dados para o gráfico de tendência
+            "kpis": kpis_data, 
+            "status_chart_spec": status_chart_spec_json, 
+            "trend_chart_spec": trend_chart_spec_json # NOVO
         }
 
-        # 6. Renderizar o template
+        # 5. Renderizar o template
         return templates.TemplateResponse("dashboard.html", context)
 
 
