@@ -241,3 +241,33 @@ class OrdemServicoService:
         }
         
         return status_distribution
+    
+    # ----------------------------------------------------
+    # NOVO: Mapeamento de Análise - Tendência Mensal
+    # ----------------------------------------------------
+    async def get_os_by_month(self, db: AsyncSession) -> List[Dict[str, Any]]:
+        """
+        Retorna a contagem de Ordens de Serviço agrupadas pelo mês e ano da data de entrada.
+        O formato da chave de mês é 'YYYY-MM'.
+        """
+        # Formata a data de entrada para 'YYYY-MM' e a etiqueta como 'mes'
+        # Em SQLite, func.strftime é usado para formatação de data.
+        # Se você usar PostgreSQL, usaria func.to_char(OrdemServico.data_entrada, 'YYYY-MM').
+        
+        month_label = func.strftime('%Y-%m', OrdemServico.data_entrada).label('mes')
+        
+        query = select(
+            month_label,
+            func.count(OrdemServico.id).label('count')
+        ).group_by(month_label).order_by(month_label) # Ordena pela data para o gráfico de tendência
+
+        result = await db.execute(query)
+        
+        # Converte os resultados em uma lista de dicionários
+        # Ex: [{"mes": "2025-11", "count": 15}, ...]
+        os_by_month = [
+            {"mes": row.mes, "count": row.count} 
+            for row in result.all()
+        ]
+        
+        return os_by_month
