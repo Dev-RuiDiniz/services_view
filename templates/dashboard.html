@@ -130,7 +130,7 @@
         
         // Verifica se a especificação JSON não está vazia e renderiza
         if (status_chart_spec && Object.keys(status_chart_spec).length > 0) {
-            // Correção da sintaxe do objeto de opções para evitar erros de parser
+            // Sintaxe JS em uma linha: robusta contra problemas de indentação do template
             vegaEmbed('#status_chart_container', status_chart_spec, { mode: "vega-lite", actions: false });
         }
         
@@ -141,7 +141,7 @@
         
         // Verifica se a especificação JSON não está vazia e renderiza
         if (trend_chart_spec && Object.keys(trend_chart_spec).length > 0) {
-            // Correção da sintaxe do objeto de opções para evitar erros de parser
+            // Sintaxe JS em uma linha: robusta contra problemas de indentação do template
             vegaEmbed('#trend_chart_container', trend_chart_spec, { mode: "vega-lite", actions: false });
         }
     </script>
