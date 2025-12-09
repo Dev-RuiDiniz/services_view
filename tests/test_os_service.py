@@ -121,3 +121,107 @@ async def test_get_os_by_id_not_found(os_service: OrdemServicoService, async_ses
     # ASSERT: Verifica se o status code da exceção é 404
     assert excinfo.value.status_code == status.HTTP_404_NOT_FOUND
     assert "OS não encontrada" in excinfo.value.detail # A mensagem deve ser clara
+
+# ----------------------------------------------------------------------    
+    # DADOS E FIXTURES DE TESTE PARA AGGREGAÇÃO (KPIs)
+# ----------------------------------------------------------------------
+
+# Definição do Dataset de Teste
+# A data de referência é HOJE (datetime.date.today()) para cálculos de prazo.
+HOJE = date.today() 
+
+DATASET_KPI = [
+    # 1. OS Pendente (No Prazo - Longe)
+    {"os_num": "OS-100", "cliente": "A", "tipo": "Manutenção", "equipamento": "E1", "status": "Pendente", "prazo_entrega": HOJE + timedelta(days=10)},
+    
+    # 2. OS Próximo do Prazo (Calculado: 3 dias)
+    {"os_num": "OS-101", "cliente": "B", "tipo": "Instalação", "equipamento": "E2", "status": "Em Andamento", "prazo_entrega": HOJE + timedelta(days=2)},
+    
+    # 3. OS Atrasada (Calculado: -1 dia)
+    {"os_num": "OS-102", "cliente": "C", "tipo": "Manutenção", "equipamento": "E3", "status": "Em Andamento", "prazo_entrega": HOJE - timedelta(days=1)},
+    
+    # 4. OS Concluída (Não entra no cálculo de Atraso/Próximo)
+    {"os_num": "OS-103", "cliente": "D", "tipo": "Orçamento", "equipamento": "E4", "status": "Concluída", "prazo_entrega": HOJE - timedelta(days=5)},
+    
+    # 5. Outra OS Em Andamento (Próximo do Prazo)
+    {"os_num": "OS-104", "cliente": "E", "tipo": "Manutenção", "equipamento": "E5", "status": "Em Andamento", "prazo_entrega": HOJE + timedelta(days=3)},
+    
+    # 6. Outra OS Pendente (No Prazo - Longe)
+    {"os_num": "OS-105", "cliente": "F", "tipo": "Instalação", "equipamento": "E6", "status": "Pendente", "prazo_entrega": HOJE + timedelta(days=15)},
+    
+    # 7. OS Aguardando Peças (Status customizado)
+    {"os_num": "OS-106", "cliente": "G", "tipo": "Manutenção", "equipamento": "E7", "status": "Aguardando Peças", "prazo_entrega": HOJE + timedelta(days=5)},
+    
+    # 8. OS Concluída (Outro mês para teste de tendência mensal, se necessário)
+    {"os_num": "OS-107", "cliente": "H", "tipo": "Orçamento", "equipamento": "E8", "status": "Concluída", "data_entrada": HOJE - timedelta(days=60), "prazo_entrega": HOJE - timedelta(days=55)},
+]
+
+@pytest.fixture
+async def populated_session(async_session_in_memory: AsyncSession):
+    """Popula a sessão do DB em memória com dados de teste fixos."""
+    from models.os_model import OrdemServico # Importa dentro para evitar circular dependência
+    
+    # 1. Insere cada item do dataset
+    for data in DATASET_KPI:
+        # Usa o método do service para garantir que a lógica de criação é testada
+        # Ou cria diretamente o objeto model, para isolar a criação do service dos testes de agregação
+        os_obj = OrdemServico(**data)
+        async_session_in_memory.add(os_obj)
+        
+    # 2. Persiste os dados (commit)
+    await async_session_in_memory.commit()
+    
+    # 3. Retorna a sessão populada
+    yield async_session_in_memory
+
+
+# ----------------------------------------------------------------------
+# TESTES UNITÁRIOS: AGREGAÇÃO DE DADOS (KPIs)
+# ----------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_get_kpis_aggregation(os_service: OrdemServicoService, populated_session: AsyncSession):
+    """
+    Verifica se o cálculo de KPIs (total, atrasadas, em andamento, concluídas)
+    retorna os valores esperados para o dataset fixo.
+    """
+    # ARRANGE: Total de OSs no dataset: 8
+    # Total de Concluídas/Canceladas (Status Fixo): 2 (OS-103, OS-107)
+    # Total de Atrasadas (Calculado): 1 (OS-102)
+    # Total Em Andamento (Status Pendente, Em Andamento, Aguardando Peças): 5
+    
+    # ACT: Chama a função de KPIs
+    kpis = await os_service.get_kpis(populated_session)
+    
+    # ASSERT: Verifica os valores
+    assert kpis["total_os"] == 8, "O KPI 'total_os' deve ser 8."
+    assert kpis["total_concluidas"] == 2, "O KPI 'total_concluidas' deve ser 2."
+    assert kpis["total_atrasadas"] == 1, "O KPI 'total_atrasadas' deve ser 1 (OS-102)."
+    assert kpis["total_em_andamento"] == 5, "O KPI 'total_em_andamento' deve ser 5 (Pendente, Em Andamento, Aguardando Peças, excluindo Concluídas/Canceladas)."
+
+
+@pytest.mark.asyncio
+async def test_get_status_distribution_calculation(os_service: OrdemServicoService, populated_session: AsyncSession):
+    """
+    Verifica se a distribuição de status (incluindo status calculados)
+    retorna as contagens corretas.
+    """
+    # ARRANGE (Valores esperados com base no DATASET_KPI):
+    # - Concluída: 2 (OS-103, OS-107)
+    # - ATRASADO: 1 (OS-102)
+    # - PRÓXIMO DO PRAZO: 2 (OS-101, OS-104)
+    # - Pendente: 2 (OS-100, OS-105)
+    # - Aguardando Peças: 1 (OS-106)
+    
+    # ACT: Chama a função de distribuição de status
+    distribution = await os_service.get_status_distribution(populated_session)
+    
+    # ASSERT: Verifica as contagens no dicionário resultante
+    assert distribution.get("Concluída") == 2
+    assert distribution.get("ATRASADO") == 1
+    assert distribution.get("PRÓXIMO DO PRAZO") == 2
+    assert distribution.get("Pendente") == 2
+    assert distribution.get("Aguardando Peças") == 1
+    
+    # Garante que não há outros status
+    assert len(distribution) == 5
