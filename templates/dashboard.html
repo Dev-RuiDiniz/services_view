@@ -6,6 +6,11 @@
     <title>{{ title }} - Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', path='main.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+    
     <style>
         /* Estilos básicos para o Dashboard */
         body { font-family: 'Roboto', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
@@ -25,6 +30,7 @@
             padding: 20px;
             border-radius: 6px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            text-align: center;
         }
         .kpi-card h3 {
             margin-top: 0;
@@ -41,7 +47,7 @@
         /* Estilos para Áreas de Gráfico */
         .chart-section {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr 1fr; /* Colunas Lado a Lado */
             gap: 30px;
             padding-top: 20px;
         }
@@ -50,6 +56,12 @@
             padding: 20px;
             border-radius: 6px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        /* Responsividade básica */
+        @media (max-width: 768px) {
+            .chart-section {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -61,46 +73,47 @@
         <h2>Métricas Chave (KPIs)</h2>
         <div class="kpi-grid">
             
-            {% if os_counts and os_counts.total %}
             <div class="kpi-card" style="border-left-color: #17a2b8;">
-                <h3>Total de OSs Abertas</h3>
-                <div class="kpi-value">{{ os_counts.total }}</div>
+                <h3>Total de OSs Registradas</h3>
+                <div class="kpi-value">{{ kpis.total_os | default(0) }}</div>
             </div>
-            {% endif %}
 
-            {% if os_counts and os_counts.Pendente %}
-            <div class="kpi-card" style="border-left-color: #ffc107;">
-                <h3>OSs Pendentes</h3>
-                <div class="kpi-value">{{ os_counts.Pendente }}</div>
-            </div>
-            {% endif %}
-
-            {% if os_counts and os_counts.ATRASADO %}
             <div class="kpi-card" style="border-left-color: #dc3545;">
                 <h3>OSs Atrasadas</h3>
-                <div class="kpi-value">{{ os_counts.ATRASADO }}</div>
+                <div class="kpi-value">{{ kpis.atrasadas_count | default(0) }}</div>
             </div>
-            {% endif %}
 
-            {% if os_counts and os_counts.Concluída %}
-            <div class="kpi-card" style="border-left-color: #28a745;">
-                <h3>OSs Concluídas</h3>
-                <div class="kpi-value">{{ os_counts.Concluída }}</div>
+            <div class="kpi-card" style="border-left-color: #007bff;">
+                <h3>Média de Prazo (dias)</h3>
+                <div class="kpi-value">
+                    {% if kpis.media_prazo_dias is not none %}
+                        {{ "%.2f" | format(kpis.media_prazo_dias) }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
             </div>
-            {% endif %}
 
         </div>
         
-        <h2>Análise de Status e Volume</h2>
+        <h2>Análise de Status e Tendência</h2>
         <div class="chart-section">
             <div class="chart-box">
-                <h3>Distribuição de Status (Gráfico de Pizza/Barra)</h3>
-                <p>Espaço reservado para o Gráfico de Status.</p>
+                <h3>Distribuição de Status Atual</h3>
+                <div id="status_chart_container">
+                    {% if kpis.total_os == 0 %}
+                        <p>Sem dados de OSs para exibir a distribuição.</p>
+                    {% endif %}
+                </div>
             </div>
             
             <div class="chart-box">
-                <h3>Volume de Abertura por Mês</h3>
-                <p>Espaço reservado para o Gráfico de Linha de Volume.</p>
+                <h3>Tendência de Abertura de OSs (Mensal)</h3>
+                <div id="trend_chart_container">
+                    {% if kpis.total_os == 0 %}
+                        <p>Sem dados de OSs para exibir a tendência.</p>
+                    {% endif %}
+                </div>
             </div>
         </div>
 
@@ -108,5 +121,33 @@
             <a href="{{ url_for('list_os') }}" style="text-decoration: none; padding: 10px 15px; background-color: #6c757d; color: white; border-radius: 5px;">Voltar para Listagem</a>
         </div>
     </div>
+
+    <script type="text/javascript">
+        // -------------------------------------------------------------------
+        // GRÁFICO 1: DISTRIBUIÇÃO DE STATUS
+        // -------------------------------------------------------------------
+        var status_chart_spec = {{ status_chart_spec | safe }}; 
+        
+        // Verifica se a especificação JSON não está vazia e renderiza
+        if (status_chart_spec && Object.keys(status_chart_spec).length > 0) {
+            vegaEmbed('#status_chart_container', status_chart_spec, { 
+                mode: "vega-lite", 
+                actions: false // Desabilita o menu de contexto (opcional)
+            });
+        }
+        
+        // -------------------------------------------------------------------
+        // GRÁFICO 2: TENDÊNCIA MENSAL
+        // -------------------------------------------------------------------
+        var trend_chart_spec = {{ trend_chart_spec | safe }}; 
+        
+        // Verifica se a especificação JSON não está vazia e renderiza
+        if (trend_chart_spec && Object.keys(trend_chart_spec).length > 0) {
+            vegaEmbed('#trend_chart_container', trend_chart_spec, { 
+                mode: "vega-lite",
+                actions: false // Desabilita o menu de contexto (opcional)
+            });
+        }
+    </script>
 </body>
 </html>
