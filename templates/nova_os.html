@@ -3,84 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }} - Nova OS</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='main.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        /* Estilos básicos do formulário */
-        body { font-family: 'Roboto', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
-        .container { background: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); max-width: 600px; margin: 0 auto; }
-        h1 { color: #333; border-bottom: 2px solid #28a745; padding-bottom: 10px; margin-bottom: 20px; }
-        label { display: block; margin-top: 15px; margin-bottom: 5px; font-weight: 700; color: #555; }
-        input[type="text"], input[type="date"], select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box; /* Garante que o padding não aumente o tamanho total */
-        }
-        .form-actions {
-            margin-top: 30px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: 700;
-            text-decoration: none;
-            text-align: center;
-        }
-        .btn-submit {
-            background-color: #28a745; /* Verde */
-            color: white;
-        }
-        .btn-cancel {
-            background-color: #6c757d; /* Cinza */
-            color: white;
-        }
-    </style>
-</head>
+    <title>{{ title }}</title>
+    </head>
 <body>
-    <div class="container">
-        <h1>➕ Nova Ordem de Serviço</h1>
+    <h1>Criar Nova Ordem de Serviço ({{ title }})</h1>
+    
+    <form action="{{ url_for('create_os') }}" method="post">
+        
+        <label for="os_num">Número da OS (Obrigatório):</label>
+        <input type="text" id="os_num" name="os_num" required><br><br>
 
-        <form method="POST" action="{{ url_for('create_os') }}">
+        <label for="cliente">Cliente (Obrigatório):</label>
+        <input type="text" id="cliente" name="cliente" required><br><br>
 
-            <label for="os_num">Número da OS:</label>
-            <input type="text" id="os_num" name="os_num" required>
+        <label for="tipo">Tipo (Obrigatório):</label>
+        <input type="text" id="tipo" name="tipo" required><br><br>
+        
+        <label for="equipamento">Equipamento (Obrigatório):</label>
+        <input type="text" id="equipamento" name="equipamento" required><br><br>
 
-            <label for="cliente">Cliente:</label>
-            <input type="text" id="cliente" name="cliente" required>
+        <label for="status">Status (Obrigatório):</label>
+        <select id="status" name="status" required>
+            <option value="Pendente">Pendente</option>
+            <option value="Em Andamento">Em Andamento</option>
+            <option value="Aguardando Peça">Aguardando Peça</option>
+            <option value="Concluída">Concluída</option>
+            <option value="Cancelada">Cancelada</option>
+        </select><br><br>
 
-            <label for="tipo">Tipo:</label>
-            <select id="tipo" name="tipo" required>
-                <option value="Manutenção">Manutenção</option>
-                <option value="Instalação">Instalação</option>
-                <option value="Orçamento">Orçamento</option>
-                <option value="Outro">Outro</option>
-            </select>
+        <label for="prazo_entrega">Prazo de Entrega (Opcional):</label>
+        <input type="date" id="prazo_entrega" name="prazo_entrega"><br><br>
 
-            <label for="equipamento">Equipamento:</label>
-            <input type="text" id="equipamento" name="equipamento" required>
-            
-            <label for="prazo_entrega">Prazo de Entrega:</label>
-            <input type="date" id="prazo_entrega" name="prazo_entrega">
-
-            <label for="status">Status Inicial:</label>
-            <select id="status" name="status">
-                <option value="Pendente">Pendente</option>
-                <option value="Em Andamento">Em Andamento</option>
-                <option value="Aguardando Peças">Aguardando Peças</option>
-            </select>
-            
-            <div class="form-actions">
-                <a href="{{ url_for('list_os') }}" class="btn btn-cancel">Cancelar</a>
-                <button type="submit" class="btn btn-submit">Salvar OS</button>
-            </div>
-        </form>
-    </div>
+        <button type="submit">Criar OS</button>
+        <a href="{{ url_for('list_os') }}">Cancelar</a>
+    </form>
 </body>
 </html>
