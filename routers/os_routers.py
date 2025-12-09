@@ -197,14 +197,42 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
         status: Annotated[str, Form()],
         prazo_entrega: Annotated[Optional[str], Form()] = None
     ):
-        """ Recebe os dados do formulário e cria um novo registro no DB. """
+        """ 
+        Recebe os dados do formulário, realiza validação básica e cria um novo registro. 
+        """
         
+        # --- 1. VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS (Não vazios) ---
+        required_fields = {
+            "os_num": os_num,
+            "cliente": cliente,
+            "tipo": tipo,
+            "equipamento": equipamento,
+            "status": status,
+        }
+        
+        missing_fields = [
+            label for label, value in required_fields.items() 
+            if not value or value.strip() == ""
+        ]
+
+        if missing_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Os seguintes campos são obrigatórios e não podem estar vazios: {', '.join(missing_fields).title()}"
+            )
+        
+        # --- 2. VALIDAÇÃO DE DATA (prazo_entrega) ---
         prazo_date: Optional[dt_date] = None
         if prazo_entrega:
             try:
+                # Tenta converter a string ISO (YYYY-MM-DD) para um objeto date
                 prazo_date = dt_date.fromisoformat(prazo_entrega)
             except ValueError:
-                raise HTTPException(status_code=400, detail="Formato de data inválido para Prazo de Entrega.")
+                # Captura erro se o formato da string não for um ISO date válido
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail="Formato de data inválido para Prazo de Entrega. Use o formato YYYY-MM-DD."
+                )
 
         os_data = {
             "os_num": os_num,
@@ -215,18 +243,23 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
             "prazo_entrega": prazo_date
         }
 
+        # --- 3. CHAMADA AO SERVICE LAYER ---
         try:
+            # O service layer já contém o tratamento de erros do DB (Tarefa 7)
             await os_service.create_os(db, os_data)
+        except HTTPException:
+             # Re-lança HTTPException gerada pela camada de serviço (erro 500 de DB)
+             raise
         except Exception as e:
-            print(f"Erro ao criar OS: {e}")
-            raise HTTPException(status_code=500, detail="Falha ao registrar a Ordem de Serviço no banco de dados.")
+            # Captura qualquer outro erro inesperado
+            print(f"Erro inesperado ao criar OS: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ocorreu um erro interno ao processar a Ordem de Serviço.")
 
         # Redirecionamento Pós-POST
         return RedirectResponse(
             url=router.url_path_for("list_os"), 
             status_code=status.HTTP_303_SEE_OTHER
         )
-
 
     # ----------------------------------------------------
     # ROTA GET: Formulário de Edição (READ by ID - VIEW)
