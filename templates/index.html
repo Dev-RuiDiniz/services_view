@@ -13,83 +13,93 @@
             Gerencie e acompanhe o status de todas as Ordens de Serviço.
         </p>
         
-        <div class="action-buttons">
-            <a href="{{ url_for('new_os_form') }}" class="button primary">➕ Nova Ordem de Serviço</a>
-            <a href="{{ url_for('dashboard_view') }}" class="button secondary">📊 Ver Dashboard</a>
+        <div class="action-buttons" style="margin-bottom: 20px;">
+            <a href="{{ url_for('new_os_form') }}" class="btn btn-primary">➕ Nova Ordem de Serviço</a>
+            <a href="{{ url_for('dashboard_view') }}" class="btn btn-secondary">📊 Ver Dashboard</a>
         </div>
 
-        <form method="GET" action="{{ url_for('list_os') }}" class="filter-form">
+        <form method="GET" action="{{ url_for('list_os') }}" class="filter-form" style="padding: 20px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 30px;">
             
-            <label for="status">Filtrar por Status:</label>
-            <select id="status" name="status">
-                
-                {% set current_status = request.query_params.get('status') %}
+            <div style="display: flex; gap: 20px; align-items: flex-end;">
+                <div class="form-group" style="flex: 1;">
+                    <label for="status">Filtrar por Status:</label>
+                    <select id="status" name="status">
+                        
+                        {% set current_status = request.query_params.get('status') %}
 
-                <option value="" {% if current_status == '' or current_status is none %}selected{% endif %}>-- Todos --</option>
-                <option value="Pendente" {% if current_status == "Pendente" %}selected{% endif %}>Pendente</option>
-                <option value="Em Andamento" {% if current_status == "Em Andamento" %}selected{% endif %}>Em Andamento</option>
-                <option value="Aguardando Peça" {% if current_status == "Aguardando Peça" %}selected{% endif %}>Aguardando Peça</option>
-                <option value="ATRASADO" {% if current_status == "ATRASADO" %}selected{% endif %}>ATRASADO</option>
-                <option value="Concluída" {% if current_status == "Concluída" %}selected{% endif %}>Concluída</option>
-                <option value="Cancelada" {% if current_status == "Cancelada" %}selected{% endif %}>Cancelada</option>
-            </select>
+                        <option value="" {% if current_status == '' or current_status is none %}selected{% endif %}>-- Todos --</option>
+                        <option value="Pendente" {% if current_status == "Pendente" %}selected{% endif %}>Pendente</option>
+                        <option value="Em Andamento" {% if current_status == "Em Andamento" %}selected{% endif %}>Em Andamento</option>
+                        <option value="Aguardando Peça" {% if current_status == "Aguardando Peça" %}selected{% endif %}>Aguardando Peça</option>
+                        <option value="ATRASADO" {% if current_status == "ATRASADO" %}selected{% endif %}>ATRASADO</option>
+                        <option value="Concluída" {% if current_status == "Concluída" %}selected{% endif %}>Concluída</option>
+                        <option value="Cancelada" {% if current_status == "Cancelada" %}selected{% endif %}>Cancelada</option>
+                    </select>
+                </div>
 
-            <label for="cliente">Buscar Cliente:</label>
-            <input type="text" id="cliente" name="cliente" 
-                   value="{{ request.query_params.get('cliente') if request.query_params.get('cliente') is not none else '' }}" 
-                   placeholder="Nome ou parte do nome">
+                <div class="form-group" style="flex: 1;">
+                    <label for="cliente">Buscar Cliente:</label>
+                    <input type="text" id="cliente" name="cliente" 
+                           value="{{ request.query_params.get('cliente') if request.query_params.get('cliente') is not none else '' }}" 
+                           placeholder="Nome ou parte do nome">
+                </div>
 
-            <button type="submit" class="button filter">Filtrar</button>
-            <a href="{{ url_for('list_os') }}" class="button default">Limpar Filtros</a>
+                <div style="display: flex; gap: 8px;">
+                    <button type="submit" class="btn btn-primary">Filtrar</button>
+                    <a href="{{ url_for('list_os') }}" class="btn btn-secondary">Limpar Filtros</a>
+                </div>
+            </div>
         </form>
 
         {% if os_list %}
-        <table>
-            <thead>
-                <tr>
-                    <th>OS #</th>
-                    <th>Cliente</th>
-                    <th>Tipo</th>
-                    <th>Equipamento</th>
-                    <th>Data Entrada</th>
-                    <th>Prazo Entrega</th>
-                    <th>Status</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for os in os_list %}
-                <tr class="status-{{ os.status | lower | replace(' ', '-') }}">
-                    <td>{{ os.os_num }}</td>
-                    <td>{{ os.cliente }}</td>
-                    <td>{{ os.tipo }}</td>
-                    <td>{{ os.equipamento }}</td>
-                    <td>{{ os.data_entrada }}</td>
-                    <td>
-                        {% if os.prazo_entrega %}
-                            {{ os.prazo_entrega }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td>
-                        <span class="status-badge status-{{ os.status | lower | replace(' ', '-') }}">
-                            {{ os.status }}
-                        </span>
-                    </td>
-                    <td class="action-cell">
-                        <a href="{{ url_for('edit_os_form', os_id=os.id) }}" class="icon-button edit" title="Editar">✏️</a>
-                        
-                        <form method="POST" action="{{ url_for('delete_os', os_id=os.id) }}" 
-                              onsubmit="return confirm('Tem certeza que deseja deletar a OS {{ os.os_num }}?');" 
-                              style="display:inline;">
-                            <button type="submit" class="icon-button delete" title="Deletar">🗑️</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="os-table">
+                <thead>
+                    <tr>
+                        <th>OS #</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
+                        <th>Equipamento</th>
+                        <th>Data Entrada</th>
+                        <th>Prazo Entrega</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for os in os_list %}
+                    <tr>
+                        <td>{{ os.os_num }}</td>
+                        <td>{{ os.cliente }}</td>
+                        <td>{{ os.tipo }}</td>
+                        <td>{{ os.equipamento }}</td>
+                        <td>{{ os.data_entrada }}</td>
+                        <td>
+                            {% if os.prazo_entrega %}
+                                {{ os.prazo_entrega }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ os.status | lower | replace(' ', '-') | replace('peça', 'peca') }}">
+                                {{ os.status }}
+                            </span>
+                        </td>
+                        <td class="action-cell">
+                            <a href="{{ url_for('edit_os_form', os_id=os.id) }}" class="link-action" title="Editar">✏️</a>
+                            
+                            <form method="POST" action="{{ url_for('delete_os', os_id=os.id) }}" 
+                                    onsubmit="return confirm('Tem certeza que deseja deletar a OS {{ os.os_num }}?');" 
+                                    style="display:inline;">
+                                <button type="submit" class="link-action btn-danger" title="Deletar" style="background: none; border: none; cursor: pointer; color: var(--danger-color);">🗑️</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
         <p class="no-results">Nenhuma Ordem de Serviço encontrada. Crie uma nova ou ajuste os filtros.</p>
         {% endif %}

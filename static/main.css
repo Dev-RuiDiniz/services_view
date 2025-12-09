@@ -110,6 +110,13 @@ h1 {
     color: #0056b3;
 }
 
+/* Garante que o botão de deletar pareça um ícone na tabela (link-action) */
+.action-cell .link-action.btn-danger {
+    color: var(--danger-color) !important;
+    padding: 0;
+    background: none;
+    border: none;
+}
 
 /* -----------------------------------------------------
  * ESTILOS DE TABELAS (Listagem)
@@ -161,7 +168,10 @@ h1 {
     transition: background-color 0.3s ease;
 }
 
-/* Estilo de Status/Badge */
+/* -----------------------------------------------------
+ * ESTILOS DE STATUS/BADGE (Classes Dinâmicas)
+ * -----------------------------------------------------
+ */
 .status-badge {
     padding: 4px 8px;
     border-radius: 4px;
@@ -169,25 +179,53 @@ h1 {
     font-weight: 700;
     text-transform: uppercase;
     display: inline-block;
+    white-space: nowrap; /* Evita quebra de linha em nomes de status */
 }
 
+/* STATUS COMUNS (CRUD) */
 .status-concluida {
     background-color: var(--success-color);
     color: var(--bg-white);
 }
 
+/* ATENÇÃO: Status Pendente usa cor amarela/laranja no tema */
 .status-pendente {
     background-color: #ffc107; /* Amarelo */
     color: var(--text-dark);
 }
 
-.status-atrasada {
+.status-atrasada, .status-atrasado { /* Suporte para as duas formas */
     background-color: var(--danger-color);
     color: var(--bg-white);
 }
 
+.status-cancelada {
+    background-color: var(--secondary-color);
+    color: var(--bg-white);
+}
+
+.status-em-andamento {
+    background-color: var(--primary-color);
+    color: var(--bg-white);
+}
+
+/* STATUS ADICIONAIS/CALCULADOS */
+
+/* Status 'Aguardando Peças' (usado em CRUD) */
+.status-aguardando-pecas, .status-aguardando-peca {
+    background-color: #ff9800; /* Laranja */
+    color: var(--bg-white);
+}
+
+/* Status calculado 'PRÓXIMO' (usado em list_os.html/os_list.html) */
+.status-proximo {
+    background-color: #ffc107; /* Amarelo (igual ao Pendente) */
+    color: var(--text-dark);
+}
+
+
 /* -----------------------------------------------------
- * ESTILOS DE FORMULÁRIO
+ * ESTILOS DE FORMULÁRIO E FILTRO
  * -----------------------------------------------------
  */
 .form-group {
@@ -220,6 +258,19 @@ h1 {
     border-color: var(--primary-color);
     outline: none;
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Estilos específicos para o Formulário de Filtro da Listagem */
+.filter-form {
+    background-color: var(--bg-light);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.filter-form .form-group {
+    margin-bottom: 0; /* Remove margem inferior padrão para layout de filtro */
 }
 
 /* -----------------------------------------------------

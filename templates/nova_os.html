@@ -3,39 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }}</title>
-    </head>
+    <title>{{ title }} - Nova OS</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='main.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Define a largura máxima do container para formulários (consistente com editar.html) */
+        .container { 
+            max-width: 600px; 
+            margin: 40px auto; 
+        }
+    </style>
+</head>
 <body>
-    <h1>Criar Nova Ordem de Serviço ({{ title }})</h1>
-    
-    <form action="{{ url_for('create_os') }}" method="post">
+    <div class="container">
+        <h1>➕ Criar Nova Ordem de Serviço</h1>
         
-        <label for="os_num">Número da OS (Obrigatório):</label>
-        <input type="text" id="os_num" name="os_num" required><br><br>
+        <form action="{{ url_for('create_os') }}" method="post">
+            
+            <div class="form-group">
+                <label for="os_num">Número da OS (Obrigatório):</label>
+                <input type="text" id="os_num" name="os_num" required>
+            </div>
 
-        <label for="cliente">Cliente (Obrigatório):</label>
-        <input type="text" id="cliente" name="cliente" required><br><br>
+            <div class="form-group">
+                <label for="cliente">Cliente (Obrigatório):</label>
+                <input type="text" id="cliente" name="cliente" required>
+            </div>
 
-        <label for="tipo">Tipo (Obrigatório):</label>
-        <input type="text" id="tipo" name="tipo" required><br><br>
-        
-        <label for="equipamento">Equipamento (Obrigatório):</label>
-        <input type="text" id="equipamento" name="equipamento" required><br><br>
+            <div class="form-group">
+                <label for="tipo">Tipo (Obrigatório):</label>
+                <select id="tipo" name="tipo" required>
+                    <option value="Manutenção">Manutenção</option>
+                    <option value="Instalação">Instalação</option>
+                    <option value="Orçamento">Orçamento</option>
+                    <option value="Outro">Outro</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="equipamento">Equipamento (Obrigatório):</label>
+                <input type="text" id="equipamento" name="equipamento" required>
+            </div>
 
-        <label for="status">Status (Obrigatório):</label>
-        <select id="status" name="status" required>
-            <option value="Pendente">Pendente</option>
-            <option value="Em Andamento">Em Andamento</option>
-            <option value="Aguardando Peça">Aguardando Peça</option>
-            <option value="Concluída">Concluída</option>
-            <option value="Cancelada">Cancelada</option>
-        </select><br><br>
+            <div class="form-group">
+                <label for="status">Status (Obrigatório):</label>
+                <select id="status" name="status" required>
+                    <option value="Pendente">Pendente</option>
+                    <option value="Em Andamento">Em Andamento</option>
+                    <option value="Aguardando Peças">Aguardando Peças</option>
+                    <option value="Concluída">Concluída</option>
+                    <option value="Cancelada">Cancelada</option>
+                </select>
+            </div>
 
-        <label for="prazo_entrega">Prazo de Entrega (Opcional):</label>
-        <input type="date" id="prazo_entrega" name="prazo_entrega"><br><br>
+            <div class="form-group">
+                <label for="prazo_entrega">Prazo de Entrega (Opcional):</label>
+                <input type="date" id="prazo_entrega" name="prazo_entrega">
+            </div>
 
-        <button type="submit">Criar OS</button>
-        <a href="{{ url_for('list_os') }}">Cancelar</a>
-    </form>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Criar OS</button>
+                <a href="{{ url_for('list_os') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
 </body>
 </html>
