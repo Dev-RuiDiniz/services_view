@@ -167,22 +167,14 @@ class OrdemServicoService:
         return True
     
     # ----------------------------------------------------
-    # NOVO: Mapeamento de Análise (KPIs)
+    # Mapeamento de Análise (KPIs)
     # ----------------------------------------------------
     async def get_kpis(self, db: AsyncSession) -> Dict[str, Any]:
-        """
-        Calcula e retorna três KPIs agregados da base de Ordens de Serviço:
-        1. Total de OSs.
-        2. Contagem de OSs Atrasadas (prazo_entrega < hoje E status != Concluída/Cancelada).
-        3. Média de Prazo de Entrega (em dias, desde a data de entrada).
-        """
+        # ... (implementação do get_kpis, já corrigida)
         
         # 1. Definição das Expressões Agregadas
-        
-        # KPI 1: Total de OSs
         total_os = func.count(OrdemServico.id).label('total_os')
         
-        # KPI 2: Contagem de OSs Atrasadas
         atrasadas_count = func.sum(
             case(
                 (
@@ -196,7 +188,6 @@ class OrdemServicoService:
             )
         ).label('atrasadas_count')
         
-        # KPI 3: Média de Prazo de Entrega (em dias)
         media_prazo_dias = func.avg(
             cast(OrdemServico.prazo_entrega - OrdemServico.data_entrada, Integer) 
         ).label('media_prazo_dias')
@@ -206,11 +197,9 @@ class OrdemServicoService:
         
         result = await db.execute(query)
         
-        # O resultado virá como uma tupla única
-        kpis_row = result.first() # Usando .first()
+        kpis_row = result.first() 
 
         if kpis_row is None:
-            # Caso não haja registros na tabela, retorna zeros/Nulos
             return {
                 "total_os": 0,
                 "atrasadas_count": 0,
@@ -218,17 +207,37 @@ class OrdemServicoService:
             }
 
         # 3. Formata e Retorna o Dicionário de KPIs
-        # CORREÇÃO CRÍTICA: Converte o objeto Row em dicionário para garantir acesso pelos labels.
         kpis_dict = kpis_row._asdict()
 
         kpis = {
-            # Os valores agregados são extraídos do dicionário (mais seguro)
             "total_os": int(kpis_dict.get('total_os', 0) or 0),
             "atrasadas_count": int(kpis_dict.get('atrasadas_count', 0) or 0),
-            
-            # Arredonda a média para duas casas decimais, ou None se não houver dados.
             "media_prazo_dias": round(float(kpis_dict.get('media_prazo_dias')), 2) 
                                   if kpis_dict.get('media_prazo_dias') is not None else None
         }
         
         return kpis
+    
+    # ----------------------------------------------------
+    # NOVO: Mapeamento de Análise - Distribuição de Status
+    # ----------------------------------------------------
+    async def get_status_distribution(self, db: AsyncSession) -> Dict[str, int]:
+        """
+        Retorna a contagem de Ordens de Serviço agrupadas pelo status.
+        Ex: {"Pendente": 15, "Concluída": 10, "Aguardando Peça": 5}
+        """
+        # Seleciona o status e a contagem de registros agrupados por status
+        query = select(
+            OrdemServico.status,
+            func.count(OrdemServico.id).label('count')
+        ).group_by(OrdemServico.status)
+
+        result = await db.execute(query)
+        
+        # Converte a lista de objetos Row em um dicionário {status: count}
+        # Acessa os resultados pelo índice ou nome do label (status e count)
+        status_distribution = {
+            row.status: row.count for row in result.all()
+        }
+        
+        return status_distribution
