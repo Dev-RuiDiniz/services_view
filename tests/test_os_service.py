@@ -3,7 +3,7 @@ import pytest
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from uuid import uuid4
-from datetime import date
+from datetime import date, timedelta
 from fastapi import HTTPException
 from starlette import status
 
