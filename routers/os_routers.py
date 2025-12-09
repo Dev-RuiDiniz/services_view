@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, Request, Form, HTTPException, status, Query
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Dict, Any, List
 from datetime import date as dt_date
 from fastapi.responses import RedirectResponse
 from uuid import UUID
+import altair as alt
+import pandas as pd
+
 
 # Importa a Injeção de Dependência da sessão do DB
 from database.db_setup import get_db
@@ -15,7 +18,46 @@ from services.os_service import OrdemServicoService
 # Cria uma instância global do Service Layer (reutilizável)
 os_service = OrdemServicoService()
 
+# ----------------------------------------------------
+# FUNÇÃO AUXILIAR: GERAÇÃO DE GRÁFICO (Altair)
+# ----------------------------------------------------
+def create_status_distribution_chart(data: Dict[str, int]) -> str:
+    """
+    Cria um gráfico de barras Altair a partir da distribuição de status.
+    Retorna a especificação do gráfico em formato JSON.
+    """
+    if not data:
+        return "{}"
 
+    # 1. Converter dicionário para DataFrame do Pandas (necessário para Altair)
+    df = pd.DataFrame(data.items(), columns=['Status', 'Contagem'])
+    
+    # 2. Definir uma ordem de status e escala de cores
+    status_order = ['ATRASADO', 'Pendente', 'Em Andamento', 'Aguardando Peça', 'Concluída', 'Cancelada']
+    color_range = ['#d9534f', '#f0ad4e', '#5bc0de', '#5cb85c', '#28a745', '#777777'] 
+    
+    color_scale = alt.Scale(domain=status_order, range=color_range)
+
+    # 3. Criar o Gráfico de Barras
+    chart = alt.Chart(df).mark_bar().encode(
+        # X: Status (Nominal, ordenado pela contagem decrescente)
+        x=alt.X('Status:N', sort=status_order, title='Status da OS'), 
+        # Y: Contagem (Quantitativo)
+        y=alt.Y('Contagem:Q', title='Quantidade de OSs'),
+        # Cor: Pelo Status
+        color=alt.Color('Status:N', scale=color_scale),
+        tooltip=['Status', 'Contagem']
+    ).properties(
+        title="Distribuição de Ordens de Serviço por Status"
+    ).interactive() # Permite zoom e pan
+
+    # Retorna a especificação do gráfico em JSON
+    return chart.to_json()
+
+
+# ----------------------------------------------------
+# FUNÇÃO DE CONFIGURAÇÃO PRINCIPAL DO ROUTER
+# ----------------------------------------------------
 def os_router(templates: Jinja2Templates) -> APIRouter:
     """
     Configura e retorna o APIRouter para as rotas de Ordem de Serviço,
@@ -33,7 +75,6 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
     async def list_all_os(
         request: Request,
         db: Annotated[AsyncSession, Depends(get_db)],
-        # Captura filtros da Query String da URL (Corrigido para o padrão FastAPI)
         status: Optional[str] = None,
         cliente: Optional[str] = None
     ):
@@ -55,7 +96,9 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
             {
                 "request": request,
                 "os_list": ordens_servico_enriched,
-                "title": "Lista de Ordens de Serviço"
+                "title": "Lista de Ordens de Serviço",
+                "current_status_filter": status or "", # Adiciona filtros para persistência na view
+                "current_cliente_filter": cliente or ""
             }
         )
         
@@ -68,30 +111,30 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
         db: Annotated[AsyncSession, Depends(get_db)],
     ):
         """
-        Busca os KPIs agregados e renderiza o template do dashboard.
+        Busca os KPIs e dados analíticos, gera os gráficos e renderiza o dashboard.
         """
         # 1. Obter os dados de KPIs (Total, Atrasados, Média)
         kpis_data = await os_service.get_kpis(db) 
-
-        # 2. Mapeamento das contagens para o formato esperado pelo template (os_counts)
-        # Notas: 'Pendente' e 'Concluída' estão simulados como 0, pois o get_kpis() atual não os calcula.
-        os_counts = {
-            "total": kpis_data.get("total_os", 0),
-            "ATRASADO": kpis_data.get("atrasadas_count", 0),
-            "Pendente": 0, 
-            "Concluída": 0 
-        }
         
-        # 3. Preparar o contexto para o template
+        # 2. Obter a distribuição de status para o gráfico
+        status_distribution = await os_service.get_status_distribution(db)
+        
+        # 3. Gerar o JSON do gráfico de distribuição
+        status_chart_spec_json = create_status_distribution_chart(status_distribution)
+        
+        # 4. Obter a tendência por mês (próxima tarefa)
+        os_by_month_data = await os_service.get_os_by_month(db)
+        
+        # 5. Preparar o contexto para o template
         context = {
             "request": request,
-            "title": "Dashboard",
-            "os_counts": os_counts,
-            "media_prazo_dias": kpis_data.get("media_prazo_dias"),
-            "kpis_data": kpis_data # Passa o dicionário completo
+            "title": "Dashboard de Análise de OS",
+            "kpis": kpis_data, # Dicionário completo de KPIs
+            "status_chart_spec": status_chart_spec_json, # JSON do gráfico de distribuição
+            "os_by_month_data": os_by_month_data # Dados para o gráfico de tendência
         }
 
-        # 4. Renderizar o template
+        # 6. Renderizar o template
         return templates.TemplateResponse("dashboard.html", context)
 
 
@@ -255,4 +298,4 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
             status_code=status.HTTP_303_SEE_OTHER
         )
 
-    return router
+    return router # RETORNO FINAL DO ROUTER
