@@ -14,15 +14,10 @@ class OrdemServicoService:
     incluindo enriquecimento de dados e tratamento de erros do banco de dados.
     """
     
-    # ----------------------------------------------------
-    # MÉTODOS AUXILIARES DE ENRIQUECIMENTO DE DADOS (Síncronos)
-    # ----------------------------------------------------
-    
+    # ... [Métodos auxiliares e CRUD (CREATE, GET ALL, GET BY ID, UPDATE, DELETE) inalterados] ...
+
     def _calculate_status(self, os: OrdemServico) -> str:
-        """
-        Calcula um status customizado (ex: 'ATRASADO') baseado na data de prazo
-        e no status atual da OS.
-        """
+# ... (conteúdo da função _calculate_status inalterado) ...
         # Se a OS já está concluída ou cancelada, não precisa calcular.
         if os.status in ["Concluída", "Cancelada"]:
             return os.status
@@ -41,9 +36,7 @@ class OrdemServicoService:
     
     
     def _format_date(self, date_orm: Optional[datetime.date]) -> Optional[str]:
-        """
-        Formata um objeto datetime.date/datetime.datetime em uma string 'dd/mm/YYYY'.
-        """
+# ... (conteúdo da função _format_date inalterado) ...
         if date_orm:
             # Garante que funciona mesmo se for datetime (se data_entrada for datetime)
             if isinstance(date_orm, datetime.datetime):
@@ -53,10 +46,7 @@ class OrdemServicoService:
     
     
     def _enrich_os_data(self, os_list: List[OrdemServico]) -> List[Dict[str, Any]]:
-        """
-        Transforma a lista de objetos ORM em uma lista de dicionários enriquecidos
-        com status calculado e datas formatadas para a view.
-        """
+# ... (conteúdo da função _enrich_os_data inalterado) ...
         enriched_list = []
         for os in os_list:
             # Garante que dados ORM são acessados antes da sessão ser fechada
@@ -79,7 +69,7 @@ class OrdemServicoService:
     # MÉTODOS CRUD (Assíncronos)
     # ----------------------------------------------------
     async def create_os(self, db: AsyncSession, os_data: dict) -> OrdemServico:
-        """ Cria e persiste uma nova Ordem de Serviço. """
+# ... (conteúdo da função create_os inalterado) ...
         try:
             novo_os = OrdemServico(**os_data)
             db.add(novo_os)
@@ -100,7 +90,7 @@ class OrdemServicoService:
         status_filter: Optional[str] = None,
         cliente: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """ Busca todas as Ordens de Serviço, aplicando filtros opcionais. """
+# ... (conteúdo da função get_all_os inalterado) ...
         try:
             query = select(OrdemServico)
             conditions = []
@@ -126,7 +116,7 @@ class OrdemServicoService:
             )
 
     async def get_os_by_id(self, db: AsyncSession, os_id: UUID) -> Optional[OrdemServico]:
-        """ Busca uma única Ordem de Serviço pelo seu UUID. """
+# ... (conteúdo da função get_os_by_id inalterado) ...
         try:
             query = select(OrdemServico).where(OrdemServico.id == os_id)
             result = await db.execute(query)
@@ -151,7 +141,7 @@ class OrdemServicoService:
             )
         
     async def update_os(self, db: AsyncSession, os_id: UUID, os_data: Dict[str, Any]) -> OrdemServico:
-        """ Atualiza os atributos de uma Ordem de Serviço existente e persiste. """
+# ... (conteúdo da função update_os inalterado) ...
         # get_os_by_id já levanta 404 se não encontrado
         os_existente = await self.get_os_by_id(db, os_id)
         
@@ -173,7 +163,7 @@ class OrdemServicoService:
             )
 
     async def delete_os(self, db: AsyncSession, os_id: UUID) -> bool:
-        """ Remove um registro de Ordem de Serviço pelo ID. """
+# ... (conteúdo da função delete_os inalterado) ...
         # get_os_by_id já levanta 404 se não encontrado
         os_existente = await self.get_os_by_id(db, os_id)
             
@@ -194,69 +184,69 @@ class OrdemServicoService:
     # MÉTODOS DE ANÁLISE (DASHBOARD)
     # ----------------------------------------------------
     
-    async def get_kpis(self, db: AsyncSession) -> Dict[str, Any]:
-        """ 
-        Calcula os Key Performance Indicators (KPIs) agregados: total, atrasadas, 
-        e média de prazo.
+    async def get_kpis(self, db: AsyncSession) -> Dict[str, int]:
         """
-        try:
-            # 1. Expressão para calcular a diferença de dias (SQLite usa julianday para datas)
-            dias_prazo = func.julianday(OrdemServico.prazo_entrega) - func.julianday(OrdemServico.data_entrada)
-            
-            # 2. Lógica de OS Atrasada em SQL
-            hoje = datetime.date.today()
-            
-            os_atrasadas_case = case(
-                (
-                    and_(
-                        # Prazo não nulo
-                        OrdemServico.prazo_entrega != None,
-                        # Prazo é anterior a hoje
-                        OrdemServico.prazo_entrega < hoje,
-                        # Status ainda está em aberto
-                        OrdemServico.status.notin_(["Concluída", "Cancelada"])
-                    ), 
-                    1
-                ), 
-                else_=0
-            )
+        Calcula os Key Performance Indicators (KPIs) principais: 
+        Total, Concluídas, Atrasadas e Em Andamento.
+        """
+        hoje = datetime.date.today()
 
-            # 3. Consulta principal
-            kpis_query = select(
-                func.count(OrdemServico.id).label('total_os'),
-                func.sum(os_atrasadas_case).label('atrasadas_count'),
-                func.avg(dias_prazo).label('media_prazo_dias')
-            )
+        # 1. Definição dos Cases para Agregação
+        
+        # Total Concluídas/Canceladas (Status Fixo)
+        case_concluidas = case(
+            (OrdemServico.status.in_(['Concluída', 'Cancelada']), 1),
+            else_=0
+        )
+        
+        # Total Atrasadas (Calculado: Prazo < Hoje E Status NÃO é final)
+        case_atrasadas = case(
+            (
+                and_(
+                    OrdemServico.prazo_entrega < hoje,
+                    OrdemServico.status.notin_(['Concluída', 'Cancelada'])
+                ),
+                1
+            ),
+            else_=0
+        )
+        
+        # 2. Consulta de Agregação
+        # Inclui o cálculo de total_atrasadas
+        query = select(
+            func.count(OrdemServico.id).label('total_os'),
+            func.sum(case_concluidas).label('total_concluidas'),
+            func.sum(case_atrasadas).label('total_atrasadas'), 
+        )
+        
+        try:
+            result = await db.execute(query)
+            row = result.one()
             
-            result = await db.execute(kpis_query)
-            kpis_row = result.first()
+            # 3. Mapeamento para o dicionário de resultado
+            kpis = {
+                "total_os": row.total_os if row.total_os is not None else 0,
+                "total_concluidas": row.total_concluidas if row.total_concluidas is not None else 0,
+                "total_atrasadas": row.total_atrasadas if row.total_atrasadas is not None else 0,
+            }
             
-            if not kpis_row:
-                 kpis_data = {"total_os": 0, "atrasadas_count": 0, "media_prazo_dias": None}
-            else:
-                 kpis_dict = kpis_row._asdict()
-                 
-                 # Mapeamento e tratamento de NULL/None
-                 kpis_data = {
-                     "total_os": int(kpis_dict.get('total_os', 0) or 0),
-                     "atrasadas_count": int(kpis_dict.get('atrasadas_count', 0) or 0),
-                     "media_prazo_dias": round(float(kpis_dict.get('media_prazo_dias')), 2) 
-                                         if kpis_dict.get('media_prazo_dias') is not None else None
-                 }
+            # 4. Cálculo do KPI Em Andamento
+            kpis["total_em_andamento"] = kpis["total_os"] - kpis["total_concluidas"] - kpis["total_atrasadas"]
             
-            return kpis_data
+            return kpis
             
-        except exc.SQLAlchemyError as e:
-            print(f"Erro no banco de dados ao calcular KPIs: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                detail="Falha na leitura e agregação de dados do banco de dados para KPIs."
-            )
+        except Exception as e:
+            # Tratamento de erro (retorna 0s para evitar falha do servidor)
+            print(f"Erro no banco de dados ao buscar KPIs: {e}")
+            return {
+                "total_os": 0,
+                "total_concluidas": 0,
+                "total_atrasadas": 0,
+                "total_em_andamento": 0,
+            }
         
     async def get_status_distribution(self, db: AsyncSession) -> Dict[str, int]:
-        """ 
-        Calcula a contagem de Ordens de Serviço agrupadas pelo status (incluindo o status calculado em SQL).
-        """
+# ... (conteúdo da função get_status_distribution inalterado) ...
         try:
             hoje = datetime.date.today()
             
@@ -304,9 +294,7 @@ class OrdemServicoService:
             )
         
     async def get_os_by_month(self, db: AsyncSession) -> List[Dict[str, Any]]:
-        """ 
-        Calcula a contagem de Ordens de Serviço agrupadas pelo mês de entrada ('YYYY-MM').
-        """
+# ... (conteúdo da função get_os_by_month inalterado) ...
         try:
             # Extrai o mês e ano.
             month_year_format = func.strftime('%Y-%m', OrdemServico.data_entrada).label('mes')

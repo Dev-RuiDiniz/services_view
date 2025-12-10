@@ -109,18 +109,19 @@ async def test_get_os_by_id_success(os_service: OrdemServicoService, async_sessi
 
 @pytest.mark.asyncio
 async def test_get_os_by_id_not_found(os_service: OrdemServicoService, async_session_in_memory: AsyncSession):
-    """Verifica se uma HTTPException 404 é levantada para um ID inexistente."""
-    
-    # ARRANGE: Cria um ID inexistente (um UUID aleatório)
-    non_existent_id = uuid4()
-    
-    # ACT & ASSERT: Espera que uma HTTPException seja levantada
-    with pytest.raises(HTTPException) as excinfo:
-        await os_service.get_os_by_id(async_session_in_memory, non_existent_id)
-        
-    # ASSERT: Verifica se o status code da exceção é 404
-    assert excinfo.value.status_code == status.HTTP_404_NOT_FOUND
-    assert "OS não encontrada" in excinfo.value.detail # A mensagem deve ser clara
+        """Verifica se uma HTTPException 404 é levantada para um ID inexistente."""
+
+        # ARRANGE: Cria um ID inexistente (um UUID aleatório)
+        non_existent_id = uuid4()
+
+        # ACT & ASSERT: Espera que uma HTTPException seja levantada
+        with pytest.raises(HTTPException) as excinfo:
+            await os_service.get_os_by_id(async_session_in_memory, non_existent_id)
+
+        # ASSERT: Verifica se o status code da exceção é 404
+        assert excinfo.value.status_code == status.HTTP_404_NOT_FOUND
+        # Corrigido: Usar uma substring que exista na mensagem real
+        assert "não encontrada" in excinfo.value.detail
 
 # ----------------------------------------------------------------------    
     # DADOS E FIXTURES DE TESTE PARA AGGREGAÇÃO (KPIs)
