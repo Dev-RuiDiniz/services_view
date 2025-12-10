@@ -1,16 +1,17 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
-import uvicorn
 from fastapi.templating import Jinja2Templates 
-from routers.os_routers import os_router
 
-# Importar a função de setup do banco de dados
+# Importar a rota e o setup do DB
+from routers.os_routers import os_router
 from database.db_setup import create_all_tables
+
 # Lembrete: Importe seus modelos para que Base.metadata.create_all os reconheça
 from models import os_model # Garante que a classe OrdemServico seja registrada no SQLAlchemy
 
-# --- Context Manager de Inicialização ---
+
+# --- Context Manager de Inicialização (Lifespan) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -46,14 +47,3 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # 4. Inclusão das Rotas
 # Injeta a instância 'templates' no router e o monta na aplicação
 app.include_router(os_router(templates))
-
-
-# --- Exemplo de Rota Raiz (apenas para teste inicial) ---
-@app.get("/")
-def read_root():
-    return {"message": "Bem-vindo ao Sistema de Ordens de Serviço! Core Operacional."}
-
-# --- Para rodar localmente, use o comando: uvicorn main:app --reload ---
-# Este bloco é opcional, mas útil para rodar o arquivo diretamente
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
