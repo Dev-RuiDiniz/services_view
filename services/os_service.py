@@ -1,11 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.os_model import OrdemServico 
 from typing import List, Optional, Dict, Any
-# Importante: func, case, Date, cast, Integer, exc, desc são necessários
-from sqlalchemy import select, and_, func, case, Date, cast, Integer, exc, desc 
+# Importações necessárias do SQLAlchemy para agregação
+from sqlalchemy import select, and_, func, case, Date, cast, Integer, exc, desc
 from uuid import UUID
 import datetime
-# Importar HTTPException e status de fastapi é crucial para o raise 404
+# Importações de FastAPI
 from fastapi import HTTPException, status 
 
 class OrdemServicoService:
@@ -35,275 +35,290 @@ class OrdemServicoService:
                 return "ATRASADO"
             elif diferenca <= 3:
                 return "PRÓXIMO DO PRAZO"
-                
+        
         # Retorna o status original se não houver condição especial
         return os.status
-
+    
+    
+    def _format_date(self, date_orm: Optional[datetime.date]) -> Optional[str]:
+        """
+        Formata um objeto datetime.date/datetime.datetime em uma string 'dd/mm/YYYY'.
+        """
+        if date_orm:
+            # Garante que funciona mesmo se for datetime (se data_entrada for datetime)
+            if isinstance(date_orm, datetime.datetime):
+                date_orm = date_orm.date()
+            return date_orm.strftime('%d/%m/%Y')
+        return None
+    
+    
+    def _enrich_os_data(self, os_list: List[OrdemServico]) -> List[Dict[str, Any]]:
+        """
+        Transforma a lista de objetos ORM em uma lista de dicionários enriquecidos
+        com status calculado e datas formatadas para a view.
+        """
+        enriched_list = []
+        for os in os_list:
+            # Garante que dados ORM são acessados antes da sessão ser fechada
+            os_dict = os.__dict__.copy()
+            os_dict.pop('_sa_instance_state', None)
+            
+            # Garante que o UUID é serializável
+            os_dict['id'] = str(os_dict['id'])
+            
+            # Enriquecimento
+            os_dict['status_calculado'] = self._calculate_status(os)
+            os_dict['data_entrada_formatada'] = self._format_date(os.data_entrada)
+            os_dict['prazo_entrega_formatado'] = self._format_date(os.prazo_entrega)
+            
+            enriched_list.append(os_dict)
+        return enriched_list
+    
+    
     # ----------------------------------------------------
     # MÉTODOS CRUD (Assíncronos)
     # ----------------------------------------------------
-    
-    async def create_os(self, db: AsyncSession, os_data: Dict[str, Any]) -> OrdemServico:
-        """Cria uma nova Ordem de Serviço e persiste no DB."""
-        # 1. Cria a instância do modelo
-        new_os = OrdemServico(**os_data)
-        
-        # 2. Adiciona à sessão e comita
+    async def create_os(self, db: AsyncSession, os_data: dict) -> OrdemServico:
+        """ Cria e persiste uma nova Ordem de Serviço. """
         try:
-            db.add(new_os)
+            novo_os = OrdemServico(**os_data)
+            db.add(novo_os)
             await db.commit()
-            await db.refresh(new_os)
-            return new_os
-        except exc.IntegrityError:
-            # Captura erro de chave duplicada (os_num, por exemplo)
-            await db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, 
-                detail=f"Ordem de Serviço com o número '{os_data.get('os_num')}' já existe."
-            )
+            await db.refresh(novo_os) 
+            return novo_os
         except exc.SQLAlchemyError as e:
             await db.rollback()
             print(f"Erro no banco de dados ao criar OS: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                detail="Erro no banco de dados ao criar OS."
+                detail="Falha no banco de dados ao criar a Ordem de Serviço."
             )
 
-    async def get_os_by_id(self, db: AsyncSession, os_id: UUID) -> OrdemServico:
-        """Busca uma Ordem de Serviço pelo ID."""
+    async def get_all_os(
+        self, 
+        db: AsyncSession,
+        status_filter: Optional[str] = None,
+        cliente: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """ Busca todas as Ordens de Serviço, aplicando filtros opcionais. """
+        try:
+            query = select(OrdemServico)
+            conditions = []
+            
+            if status_filter:
+                conditions.append(OrdemServico.status == status_filter)
+            if cliente:
+                conditions.append(OrdemServico.cliente.ilike(f'%{cliente}%'))
+                
+            if conditions:
+                query = query.where(and_(*conditions))
+
+            result = await db.execute(query.order_by(desc(OrdemServico.data_entrada)))
+            os_list = result.scalars().all()
+            
+            # Aplica o enriquecimento de dados antes de retornar
+            return self._enrich_os_data(os_list)
+        except exc.SQLAlchemyError as e:
+            print(f"Erro no banco de dados ao buscar todas as OSs: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                detail="Falha na leitura de dados do banco de dados."
+            )
+
+    async def get_os_by_id(self, db: AsyncSession, os_id: UUID) -> Optional[OrdemServico]:
+        """ Busca uma única Ordem de Serviço pelo seu UUID. """
         try:
             query = select(OrdemServico).where(OrdemServico.id == os_id)
             result = await db.execute(query)
-            os_obj = result.scalar_one_or_none()
-
-            # CORREÇÃO para test_get_os_by_id_not_found: Levantar 404 se não encontrado
+            
+            os_obj = result.scalars().one_or_none()
+            
+            # Levanta 404 se não encontrado (Melhoria)
             if os_obj is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, 
                     detail=f"Ordem de Serviço com ID '{os_id}' não encontrada."
                 )
             
-            # Enriquecimento de dados (aplica o status calculado)
-            os_obj.status_calculado = self._calculate_status(os_obj)
-            
-            # Formatação da data para o HTML
-            os_obj.prazo_entrega_formatado = os_obj.prazo_entrega.strftime('%d/%m/%Y') if os_obj.prazo_entrega else None
-            
             return os_obj
+        except HTTPException:
+            raise
         except exc.SQLAlchemyError as e:
-            if isinstance(e, HTTPException):
-                raise
             print(f"Erro no banco de dados ao buscar OS por ID: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                detail="Erro no banco de dados ao buscar OS por ID."
+                detail="Falha na leitura de dados do banco de dados."
             )
-
-
-    async def get_list_os(
-        self, 
-        db: AsyncSession, 
-        status_filter: Optional[str] = None, 
-        os_num: Optional[str] = None # Parâmetro de filtro adicionado
-    ) -> List[OrdemServico]:
-        """Retorna todas as ordens de serviço, opcionalmente filtradas por status e/ou número da OS."""
-        try:
-            # 1. Monta a query base
-            query = select(OrdemServico).order_by(desc(OrdemServico.data_criacao))
-            
-            # 2. Aplica Filtro de Status
-            if status_filter:
-                query = query.where(OrdemServico.status == status_filter)
-                
-            # 3. CORREÇÃO para test_get_list_os_with_no_results: Aplica Filtro de Número da OS
-            if os_num:
-                # Usando ilike para permitir busca parcial (mais robusto)
-                # O teste deve passar ao buscar por um UUID que não existirá em 'os_num'
-                query = query.where(OrdemServico.os_num.ilike(f'%{os_num}%')) 
-            
-            result = await db.execute(query)
-            os_list = result.scalars().all()
-
-            # Enriquecimento de dados (status_calculado e data formatada)
-            for os_obj in os_list:
-                os_obj.status_calculado = self._calculate_status(os_obj)
-                os_obj.prazo_entrega_formatado = os_obj.prazo_entrega.strftime('%d/%m/%Y') if os_obj.prazo_entrega else None
-
-            return os_list
-
-        except exc.SQLAlchemyError as e:
-            print(f"Erro no banco de dados ao listar OSs: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                detail="Erro no banco de dados ao listar OSs."
-            )
-
+        
     async def update_os(self, db: AsyncSession, os_id: UUID, os_data: Dict[str, Any]) -> OrdemServico:
-        """Atualiza os dados de uma Ordem de Serviço existente."""
+        """ Atualiza os atributos de uma Ordem de Serviço existente e persiste. """
+        # get_os_by_id já levanta 404 se não encontrado
+        os_existente = await self.get_os_by_id(db, os_id)
         
-        # 1. Busca a OS (irá levantar 404 se não existir)
-        existing_os = await self.get_os_by_id(db, os_id)
-        
-        # 2. Atualiza os campos
-        for key, value in os_data.items():
-            setattr(existing_os, key, value)
+        try:
+            for key, value in os_data.items():
+                if key not in ['id', 'data_criacao', 'data_entrada'] and hasattr(os_existente, key):
+                    setattr(os_existente, key, value)
+                    
+            await db.commit()
+            await db.refresh(os_existente)
             
-        # 3. Comita a transação
-        try:
-            await db.commit()
-            await db.refresh(existing_os)
-            return existing_os
-        except exc.IntegrityError:
-            await db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, 
-                detail=f"Ordem de Serviço com o número '{os_data.get('os_num')}' já existe."
-            )
+            return os_existente
         except exc.SQLAlchemyError as e:
             await db.rollback()
-            print(f"Erro no banco de dados ao atualizar OS: {e}")
+            print(f"Erro no banco de dados ao atualizar OS {os_id}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                detail="Erro no banco de dados ao atualizar OS."
+                detail="Falha no banco de dados ao atualizar a Ordem de Serviço."
             )
 
-    async def delete_os(self, db: AsyncSession, os_id: UUID) -> None:
-        """Deleta uma Ordem de Serviço pelo ID."""
-        
-        # 1. Busca a OS (irá levantar 404 se não existir)
-        os_to_delete = await self.get_os_by_id(db, os_id)
-        
-        # 2. Deleta e comita
+    async def delete_os(self, db: AsyncSession, os_id: UUID) -> bool:
+        """ Remove um registro de Ordem de Serviço pelo ID. """
+        # get_os_by_id já levanta 404 se não encontrado
+        os_existente = await self.get_os_by_id(db, os_id)
+            
         try:
-            await db.delete(os_to_delete)
+            await db.delete(os_existente)
             await db.commit()
+            
+            return True
         except exc.SQLAlchemyError as e:
             await db.rollback()
-            print(f"Erro no banco de dados ao deletar OS: {e}")
+            print(f"Erro no banco de dados ao deletar OS {os_id}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                detail="Erro no banco de dados ao deletar OS."
+                detail="Falha no banco de dados ao deletar a Ordem de Serviço."
             )
-
+    
     # ----------------------------------------------------
-    # MÉTODOS DE RELATÓRIO E AGGREGAÇÃO
+    # MÉTODOS DE ANÁLISE (DASHBOARD)
     # ----------------------------------------------------
-
-    async def get_kpis(self, db: AsyncSession) -> Dict[str, int]:
+    
+    async def get_kpis(self, db: AsyncSession) -> Dict[str, Any]:
+        """ 
+        Calcula os Key Performance Indicators (KPIs) agregados: total, atrasadas, 
+        e média de prazo.
         """
-        Calcula os KPIs: total de OSs, atrasadas, concluídas e em andamento.
-        """
-        hoje = datetime.date.today()
-
-        # Definição dos cases para contagem agregada
-        count_case = func.count(OrdemServico.id)
-        
-        # 1. Total de OSs
-        total_os_agg = count_case.label('total_os')
-        
-        # 2. CORREÇÃO para test_get_kpis_aggregation: Garantir o label 'total_concluidas'
-        concluidas_agg = func.sum(
-            case(
-                (OrdemServico.status.in_(["Concluída", "Cancelada"]), 1),
+        try:
+            # 1. Expressão para calcular a diferença de dias (SQLite usa julianday para datas)
+            dias_prazo = func.julianday(OrdemServico.prazo_entrega) - func.julianday(OrdemServico.data_entrada)
+            
+            # 2. Lógica de OS Atrasada em SQL
+            hoje = datetime.date.today()
+            
+            os_atrasadas_case = case(
+                (
+                    and_(
+                        # Prazo não nulo
+                        OrdemServico.prazo_entrega != None,
+                        # Prazo é anterior a hoje
+                        OrdemServico.prazo_entrega < hoje,
+                        # Status ainda está em aberto
+                        OrdemServico.status.notin_(["Concluída", "Cancelada"])
+                    ), 
+                    1
+                ), 
                 else_=0
             )
-        ).label('total_concluidas') 
+
+            # 3. Consulta principal
+            kpis_query = select(
+                func.count(OrdemServico.id).label('total_os'),
+                func.sum(os_atrasadas_case).label('atrasadas_count'),
+                func.avg(dias_prazo).label('media_prazo_dias')
+            )
+            
+            result = await db.execute(kpis_query)
+            kpis_row = result.first()
+            
+            if not kpis_row:
+                 kpis_data = {"total_os": 0, "atrasadas_count": 0, "media_prazo_dias": None}
+            else:
+                 kpis_dict = kpis_row._asdict()
+                 
+                 # Mapeamento e tratamento de NULL/None
+                 kpis_data = {
+                     "total_os": int(kpis_dict.get('total_os', 0) or 0),
+                     "atrasadas_count": int(kpis_dict.get('atrasadas_count', 0) or 0),
+                     "media_prazo_dias": round(float(kpis_dict.get('media_prazo_dias')), 2) 
+                                         if kpis_dict.get('media_prazo_dias') is not None else None
+                 }
+            
+            return kpis_data
+            
+        except exc.SQLAlchemyError as e:
+            print(f"Erro no banco de dados ao calcular KPIs: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                detail="Falha na leitura e agregação de dados do banco de dados para KPIs."
+            )
         
-        # 3. OSs Atrasadas (prazo_entrega < hoje E status não fixo)
-        atrasadas_agg = func.sum(
-            case(
+    async def get_status_distribution(self, db: AsyncSession) -> Dict[str, int]:
+        """ 
+        Calcula a contagem de Ordens de Serviço agrupadas pelo status (incluindo o status calculado em SQL).
+        """
+        try:
+            hoje = datetime.date.today()
+            
+            # Lógica para Atrasado/Próximo do Prazo/Status Original
+            status_calculado_sql = case(
+                # Caso 1: Atrasado
                 (
                     and_(
                         OrdemServico.prazo_entrega != None,
                         OrdemServico.prazo_entrega < hoje,
                         OrdemServico.status.notin_(["Concluída", "Cancelada"])
                     ), 
-                    1
+                    "ATRASADO"
                 ),
-                else_=0
-            )
-        ).label('total_atrasadas')
-        
-        # 4. OSs Em Andamento (Pendente, Em Andamento, Aguardando Peças)
-        em_andamento_status_agg = func.sum(
-            case(
+                # Caso 2: Próximo do Prazo (Hoje até +3 dias)
                 (
-                    OrdemServico.status.in_(["Pendente", "Em Andamento", "Aguardando Peças"]),
-                    1
-                ), 
-                else_=0
-            )
-        ).label('total_em_andamento')
-
-
-        try:
-            # Cria a query de agregação
-            kpi_query = select(
-                total_os_agg,
-                concluidas_agg,
-                atrasadas_agg,
-                em_andamento_status_agg
-            )
+                    and_(
+                        OrdemServico.prazo_entrega != None,
+                        OrdemServico.prazo_entrega >= hoje,
+                        # Adicionando 3 dias à data de hoje
+                        OrdemServico.prazo_entrega <= hoje + datetime.timedelta(days=3),
+                        OrdemServico.status.notin_(["Concluída", "Cancelada"])
+                    ), 
+                    "PRÓXIMO DO PRAZO"
+                ),
+                # Caso 3: Status Original (Padrão)
+                else_=OrdemServico.status
+            ).label('status_agregado')
             
-            result = await db.execute(kpi_query)
-            result_row = result.one()
+            # Consulta de Agregação
+            distribution_query = select(
+                status_calculado_sql,
+                func.count().label('count')
+            ).group_by(status_calculado_sql)
             
-            # Mapeamento do resultado para o dicionário (agora com o nome correto)
-            kpis = {
-                "total_os": result_row.total_os if result_row.total_os is not None else 0,
-                "total_concluidas": result_row.total_concluidas if result_row.total_concluidas is not None else 0,
-                "total_atrasadas": result_row.total_atrasadas if result_row.total_atrasadas is not None else 0,
-                "total_em_andamento": result_row.total_em_andamento if result_row.total_em_andamento is not None else 0,
-            }
+            result = await db.execute(distribution_query)
             
-            return kpis
+            return {row.status_agregado: row.count for row in result}
             
         except exc.SQLAlchemyError as e:
-            print(f"Erro no banco de dados ao calcular KPIs: {e}")
+            print(f"Erro no banco de dados ao buscar distribuição de status: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                detail="Erro no banco de dados ao calcular KPIs."
+                detail="Falha na agregação de dados do banco de dados para Distribuição de Status."
             )
-
-    async def get_status_distribution(self, db: AsyncSession) -> Dict[str, int]:
-        # ... (implementação original)
-        distribution_query = select(
-            OrdemServico.status,
-            func.count().label('count')
-        ).group_by(OrdemServico.status)
-        
-        result = await db.execute(distribution_query)
-        
-        raw_data = {row.status: row.count for row in result}
-        
-        # Aplica o cálculo de status ('ATRASADO', 'PRÓXIMO DO PRAZO') na lista completa
-        # É ineficiente, mas necessário se a lógica de _calculate_status for complexa
-        full_list = await self.get_list_os(db) 
-        
-        # Dicionário final com status calculado
-        final_distribution = {}
-        for os_obj in full_list:
-            calculated_status = self._calculate_status(os_obj)
-            final_distribution[calculated_status] = final_distribution.get(calculated_status, 0) + 1
-            
-        return final_distribution
         
     async def get_os_by_month(self, db: AsyncSession) -> List[Dict[str, Any]]:
-        # ... (implementação original)
+        """ 
+        Calcula a contagem de Ordens de Serviço agrupadas pelo mês de entrada ('YYYY-MM').
+        """
         try:
-            # 1. Extrair o mês e ano da data_entrada. O SQLite usa strftime.
-            # %Y-%m produz uma string como '2023-11'
+            # Extrai o mês e ano.
             month_year_format = func.strftime('%Y-%m', OrdemServico.data_entrada).label('mes')
             
-            # 2. Consulta de Agregação
+            # Consulta de Agregação
             trend_query = select(
                 month_year_format,
                 func.count().label('count')
-            ).group_by(month_year_format).order_by(month_year_format) # Ordena cronologicamente
+            ).group_by(month_year_format).order_by(month_year_format)
             
             result = await db.execute(trend_query)
             
-            # Retorna o resultado como uma lista de dicionários [{\"mes\": \"YYYY-MM\", \"count\": N}, ...]
             return [
                 {"mes": row.mes, "count": row.count} 
                 for row in result
@@ -313,5 +328,5 @@ class OrdemServicoService:
             print(f"Erro no banco de dados ao buscar tendência mensal: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                detail="Erro no banco de dados ao buscar tendência mensal."
+                detail="Falha na agregação de dados do banco de dados para Tendência Mensal."
             )

@@ -3,7 +3,6 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated, Optional, Dict, Any, List
 from datetime import date as dt_date
-# Importar RedirectResponse é essencial para o sucesso do POST
 from fastapi.responses import RedirectResponse
 from uuid import UUID
 import altair as alt
@@ -23,7 +22,7 @@ os_service = OrdemServicoService()
 # FUNÇÕES AUXILIARES: GERAÇÃO DE GRÁFICO (Altair)
 # ----------------------------------------------------
 def create_status_distribution_chart(data: Dict[str, int]) -> str:
-    # ... (código para gerar o gráfico de distribuição, mantido inalterado) ...
+    """ Cria o gráfico de distribuição de status (barras) usando Altair e retorna o JSON. """
     if not data:
         return "{}"
         
@@ -36,138 +35,186 @@ def create_status_distribution_chart(data: Dict[str, int]) -> str:
         'PRÓXIMO DO PRAZO': '#ffc107',
         'Pendente': '#007bff',
         'Em Andamento': '#17a2b8',
-        'Aguardando Peças': '#ff8c00', 
+        'Aguardando Peças': '#17a2b8' # Usando azul claro similar para andamento
     }
     
-    # Mapeamento para garantir que as cores do status calculado estejam corretas
-    color_scale = alt.Scale(
-        domain=list(status_colors.keys()), 
-        range=list(status_colors.values())
-    )
-
-    chart = alt.Chart(df).mark_arc(outerRadius=120).encode(
-        theta=alt.Theta("count", stack=True),
-        color=alt.Color("status", scale=color_scale),
-        order=alt.Order("count", sort="descending"),
-        tooltip=["status", "count"]
-    ).properties(
-        title="Distribuição de Ordens de Serviço por Status"
-    ).to_json()
+    color_scale = alt.Scale(domain=list(status_colors.keys()), range=list(status_colors.values()))
     
-    return chart
+    chart = alt.Chart(df).mark_bar().encode(
+        x=alt.X('status:N', title='Status da Ordem'),
+        y=alt.Y('count:Q', title='Número de OSs'),
+        color=alt.Color('status:N', scale=color_scale, legend=alt.Legend(title="Status")),
+        tooltip=['status', 'count']
+    ).properties(
+        title="Distribuição de Status de Ordens de Serviço"
+    ).interactive()
+
+    return chart.to_json()
+
 
 def create_monthly_trend_chart(data: List[Dict[str, Any]]) -> str:
-    # ... (código para gerar o gráfico de tendência, mantido inalterado) ...
+    """ Cria o gráfico de tendência mensal (linha) usando Altair e retorna o JSON. """
     if not data:
         return "{}"
-        
+
     df = pd.DataFrame(data)
-    
-    # Converte 'mes' (string 'YYYY-MM') para data para ordenação correta no gráfico
-    df['date'] = pd.to_datetime(df['mes'])
-    
-    chart = alt.Chart(df).mark_line(point=True).encode(
-        x=alt.X('date', axis=alt.Axis(title='Mês de Entrada', format='%Y-%m')),
-        y=alt.Y('count', title='Nº de OSs Criadas'),
-        tooltip=['mes', 'count']
+    # Converte 'YYYY-MM' para um tipo data para o gráfico de linha
+    df['mes_dt'] = pd.to_datetime(df['mes'] + '-01')
+
+    chart = alt.Chart(df).mark_line(point=True, color='#007bff').encode(
+        x=alt.X(
+            'mes_dt:T', 
+            title='Mês de Entrada', 
+            axis=alt.Axis(format='%Y-%m') # Formato de exibição no eixo
+        ), 
+        y=alt.Y('count:Q', title='Novas OSs Registradas'),
+        tooltip=[alt.Tooltip('mes', title='Mês'), alt.Tooltip('count', title='Contagem')]
     ).properties(
-        title='Tendência de Abertura de OSs (Mensal)'
-    ).to_json()
-    
-    return chart
+        title="Tendência de Entrada de Ordens de Serviço (Mensal)"
+    ).interactive() 
+
+    return chart.to_json()
 
 
 # ----------------------------------------------------
-# FUNÇÃO PRINCIPAL: CRIAÇÃO DO ROUTER
+# FUNÇÃO DE CONFIGURAÇÃO PRINCIPAL DO ROUTER
 # ----------------------------------------------------
 def os_router(templates: Jinja2Templates) -> APIRouter:
-    # Configura o prefixo e as tags
-    router = APIRouter(prefix="/os", tags=["Ordens de Serviço"])
+    router = APIRouter(
+        prefix="/os",
+        tags=["Ordem de Serviço"],
+    )
 
     # ----------------------------------------------------
-    # ROTA GET: Listagem de OSs (list_os)
+    # ROTA GET: Listar todas as OSs com Filtros (READ All - VIEW)
     # ----------------------------------------------------
     @router.get("/", name="list_os")
-    async def list_os(
+    async def list_all_os(
         request: Request,
         db: Annotated[AsyncSession, Depends(get_db)],
-        status_filter: Optional[str] = Query(None, alias="status"),
-        # CORREÇÃO: Adicionar o parâmetro os_num para filtragem
-        os_num_filter: Optional[str] = Query(None, alias="os_num"),
+        status: Optional[str] = Query(None, alias="status"),
+        cliente: Optional[str] = Query(None, alias="cliente")
     ):
-        """ Retorna a listagem HTML de Ordens de Serviço com filtros opcionais. """
-        
-        # 1. Chama a camada de serviço com os filtros
-        os_list = await os_service.get_list_os(
-            db, 
-            status_filter=status_filter,
-            os_num=os_num_filter # Passando o novo filtro
-        )
-        
-        # 2. Renderiza o template
-        return templates.TemplateResponse(
-            "os_list.html",
-            {
+        """ 
+        Busca todas as Ordens de Serviço aplicando filtros e renderiza a view de listagem.
+        """
+        try:
+            os_list = await os_service.get_all_os(db, status_filter=status, cliente=cliente)
+            
+            # Cria a lista de status únicos para o filtro do formulário (opcional)
+            all_status = list(set([os['status'] for os in os_list]))
+            
+            context = {
                 "request": request,
                 "title": "Listagem de Ordens de Serviço",
                 "os_list": os_list,
-                "selected_status": status_filter,
-                "selected_os_num": os_num_filter, # Passando o filtro de volta para o template
+                # Usa uma lista fixa ou 'all_status' se preferir status dinâmicos
                 "status_options": [
                     "Pendente", "Em Andamento", "Aguardando Peças", 
                     "Concluída", "Cancelada"
-                ]
+                ],
+                "current_status": status if status else "",
+                "current_cliente": cliente if cliente else ""
+            }
+            # O nome do template é "index.html" conforme o seu código
+            return templates.TemplateResponse("index.html", context) 
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro inesperado ao listar OSs: {e}")
+        
+    # ----------------------------------------------------
+    # ROTA GET: Painel de Controle (DASHBOARD)
+    # ----------------------------------------------------
+    @router.get("/dashboard", name="dashboard_view")
+    async def dashboard_view(
+        request: Request,
+        db: Annotated[AsyncSession, Depends(get_db)],
+    ):
+        """ Calcula e exibe KPIs e gráficos de análise. """
+        try:
+            kpis_data = await os_service.get_kpis(db) 
+            
+            status_distribution = await os_service.get_status_distribution(db)
+            status_chart_spec_json = create_status_distribution_chart(status_distribution)
+            
+            os_by_month_data = await os_service.get_os_by_month(db)
+            trend_chart_spec_json = create_monthly_trend_chart(os_by_month_data)
+            
+            context = {
+                "request": request,
+                "title": "Dashboard de Análise de OS",
+                "kpis": kpis_data,
+                "status_chart_spec": status_chart_spec_json,
+                "trend_chart_spec": trend_chart_spec_json
+            }
+
+            return templates.TemplateResponse("dashboard.html", context)
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro inesperado ao buscar dados do Dashboard: {e}")
+
+
+    # ----------------------------------------------------
+    # ROTA GET: Formulário de Nova OS (VIEW)
+    # ----------------------------------------------------
+    @router.get("/novo", name="new_os_form")
+    def new_os_form(request: Request):
+        """ Exibe o formulário para criação de uma nova OS. """
+        return templates.TemplateResponse(
+            "nova_os.html",
+            {
+                "request": request,
+                "title": "Criar Nova Ordem de Serviço"
             }
         )
         
     # ----------------------------------------------------
-    # ROTA GET: Formulário de Criação (new_os_form)
-    # ----------------------------------------------------
-    @router.get("/novo", name="new_os_form")
-    async def new_os_form(request: Request):
-        """ Retorna o formulário HTML para criar uma nova OS. """
-        return templates.TemplateResponse(
-            "nova_os.html", 
-            {"request": request, "title": "Criar Nova OS"}
-        )
-
-    # ----------------------------------------------------
-    # ROTA POST: Criação de Nova OS (POST)
+    # ROTA POST: Criação de Nova OS (CREATE)
     # ----------------------------------------------------
     @router.post("/novo", name="create_os")
     async def create_os(
-        request: Request,
         db: Annotated[AsyncSession, Depends(get_db)],
-        os_num: str = Form(...),
-        cliente: str = Form(...),
-        tipo: str = Form(...),
-        equipamento: str = Form(...),
-        status: str = Form(...),
-        prazo_entrega: Optional[str] = Form(None), 
+        os_num: Annotated[str, Form()],
+        cliente: Annotated[str, Form()],
+        tipo: Annotated[str, Form()],
+        equipamento: Annotated[str, Form()],
+        status: Annotated[str, Form()],
+        prazo_entrega: Annotated[Optional[str], Form()] = None
     ):
-        """ Processa a submissão do formulário para criar uma nova OS. """
+        """ Processa a criação da OS via formulário. """
         
-        # 1. Validação e conversão (Prazo)
-        try:
-            prazo_date = dt_date.fromisoformat(prazo_entrega) if prazo_entrega else None
-        except ValueError:
-            # Retorna o formulário com erro se a data for inválida
-            return templates.TemplateResponse(
-                "nova_os.html", 
-                {
-                    "request": request, 
-                    "title": "Criar Nova OS",
-                    "error_message": "O formato do Prazo de Entrega é inválido.",
-                    "os_data": {
-                        "os_num": os_num, 
-                        "cliente": cliente, 
-                        "tipo": tipo, 
-                        "equipamento": equipamento, 
-                        "status": status,
-                        "prazo_entrega": prazo_entrega
-                    }
-                }
+        # 1. VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS
+        required_fields = {
+            "os_num": os_num,
+            "cliente": cliente,
+            "tipo": tipo,
+            "equipamento": equipamento,
+            "status": status,
+        }
+        
+        missing_fields = [
+            label for label, value in required_fields.items() 
+            if not value or value.strip() == ""
+        ]
+
+        if missing_fields:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST, 
+                detail=f"Os seguintes campos são obrigatórios e não podem estar vazios: {', '.join(missing_fields).title()}"
             )
+        
+        # 2. VALIDAÇÃO DE DATA
+        prazo_date: Optional[dt_date] = None
+        if prazo_entrega:
+            try:
+                prazo_date = dt_date.fromisoformat(prazo_entrega)
+            except ValueError:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST, 
+                    detail="Formato de data inválido para Prazo de Entrega. Use o formato YYYY-MM-DD."
+                )
 
         os_data = {
             "os_num": os_num,
@@ -175,85 +222,86 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
             "tipo": tipo,
             "equipamento": equipamento,
             "status": status,
-            "prazo_entrega": prazo_date,
+            "prazo_entrega": prazo_date
         }
 
-        # 2. Chamada ao Service Layer
+        # 3. CHAMADA AO SERVICE LAYER
         try:
             await os_service.create_os(db, os_data)
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Ocorreu um erro interno: {e}")
+            raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Ocorreu um erro interno ao criar OS: {e}") 
 
-        # 3. CORREÇÃO para test_post_create_os_success: Redirecionamento Pós-POST (303 SEE OTHER)
+        # Redirecionamento Pós-POST
         return RedirectResponse(
             url=router.url_path_for("list_os"), 
             status_code=http_status.HTTP_303_SEE_OTHER 
         )
 
+
     # ----------------------------------------------------
-    # ROTA GET: Formulário de Edição (edit_os_form)
+    # ROTA GET: Formulário de Edição (READ by ID - VIEW)
     # ----------------------------------------------------
     @router.get("/editar/{os_id}", name="edit_os_form")
     async def edit_os_form(
         request: Request,
         os_id: UUID,
-        db: Annotated[AsyncSession, Depends(get_db)],
+        db: Annotated[AsyncSession, Depends(get_db)]
     ):
-        """ Retorna o formulário HTML pré-preenchido para edição de uma OS. """
-        os_obj = await os_service.get_os_by_id(db, os_id)
-        
-        return templates.TemplateResponse(
-            "editar_os.html", 
-            {
-                "request": request, 
-                "title": f"Editar OS {os_obj.os_num}",
-                "os": os_obj
+        """ Exibe o formulário pré-preenchido para edição de uma OS. """
+        try:
+            # os_data é o objeto ORM (os_service.get_os_by_id levanta 404 se não encontrado)
+            os_data = await os_service.get_os_by_id(db, os_id)
+            
+            # Garante que o formato da data é ISO para preencher o campo de input HTML
+            prazo_entrega_iso = os_data.prazo_entrega.isoformat() if os_data.prazo_entrega else ""
+            
+            context = {
+                "request": request,
+                "title": f"Editar OS #{os_data.os_num}",
+                "os": os_data,
+                "prazo_entrega_iso": prazo_entrega_iso
             }
-        )
-
+            return templates.TemplateResponse("editar_os.html", context)
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro inesperado ao carregar dados de edição: {e}") 
+        
     # ----------------------------------------------------
-    # ROTA POST: Atualização de OS (PUT/PATCH via POST)
+    # ROTA POST: Processar Edição (UPDATE)
     # ----------------------------------------------------
     @router.post("/editar/{os_id}", name="update_os")
     async def update_os(
-        request: Request,
         os_id: UUID,
         db: Annotated[AsyncSession, Depends(get_db)],
-        os_num: str = Form(...),
-        cliente: str = Form(...),
-        tipo: str = Form(...),
-        equipamento: str = Form(...),
-        status: str = Form(...),
-        prazo_entrega: Optional[str] = Form(None),
+        os_num: Annotated[str, Form()],
+        cliente: Annotated[str, Form()],
+        tipo: Annotated[str, Form()],
+        equipamento: Annotated[str, Form()],
+        status: Annotated[str, Form()],
+        prazo_entrega: Annotated[Optional[str], Form()] = None
     ):
-        """ Processa a submissão do formulário para atualizar uma OS existente. """
+        """ Processa a atualização da OS via formulário. """
         
-        # 1. Validação e conversão (Prazo)
-        try:
-            prazo_date = dt_date.fromisoformat(prazo_entrega) if prazo_entrega else None
-        except ValueError:
-            # Se a data for inválida, retorna o formulário com erro
-            os_obj = await os_service.get_os_by_id(db, os_id) # Busca para obter o objeto completo
-            return templates.TemplateResponse(
-                "editar_os.html", 
-                {
-                    "request": request, 
-                    "title": f"Editar OS {os_obj.os_num}",
-                    "os": os_obj,
-                    "error_message": "O formato do Prazo de Entrega é inválido."
-                }
-            )
-            
-        # 2. Prepara os dados
+        # 1. VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS
+        required_fields = {"os_num": os_num, "cliente": cliente, "tipo": tipo, "equipamento": equipamento, "status": status}
+        missing_fields = [label for label, value in required_fields.items() if not value or value.strip() == ""]
+        if missing_fields:
+            raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=f"Campos obrigatórios ausentes: {', '.join(missing_fields).title()}")
+        
+        # 2. VALIDAÇÃO DE DATA
+        prazo_date: Optional[dt_date] = None
+        if prazo_entrega:
+            try:
+                prazo_date = dt_date.fromisoformat(prazo_entrega)
+            except ValueError:
+                raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="Formato de data inválido para Prazo de Entrega.")
+
         os_data = {
-            "os_num": os_num, 
-            "cliente": cliente, 
-            "tipo": tipo, 
-            "equipamento": equipamento, 
-            "status": status, 
-            "prazo_entrega": prazo_date
+            "os_num": os_num, "cliente": cliente, "tipo": tipo, 
+            "equipamento": equipamento, "status": status, "prazo_entrega": prazo_date
         }
 
         # 3. CHAMADA AO SERVICE LAYER
@@ -286,42 +334,12 @@ def os_router(templates: Jinja2Templates) -> APIRouter:
             raise
         except Exception as e:
             raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Ocorreu um erro interno ao deletar OS: {e}")
-            
-        # Redireciona para a listagem após a exclusão
+
+        # Redirecionamento Pós-POST
         return RedirectResponse(
             url=router.url_path_for("list_os"), 
-            status_code=http_status.HTTP_303_SEE_OTHER 
+            status_code=http_status.HTTP_303_SEE_OTHER
         )
 
-    # ----------------------------------------------------
-    # ROTA GET: Dashboard
-    # ----------------------------------------------------
-    @router.get("/dashboard", name="dashboard_view")
-    async def dashboard_view(
-        request: Request,
-        db: Annotated[AsyncSession, Depends(get_db)],
-    ):
-        """ Retorna a página de dashboard com gráficos e KPIs. """
-        
-        # 1. Busca os dados brutos
-        kpis = await os_service.get_kpis(db)
-        distribution_data = await os_service.get_status_distribution(db)
-        trend_data = await os_service.get_os_by_month(db)
-        
-        # 2. Gera as especificações dos gráficos Altair/Vega-Lite (JSON)
-        status_chart_spec = create_status_distribution_chart(distribution_data)
-        trend_chart_spec = create_monthly_trend_chart(trend_data)
-        
-        # 3. Renderiza o template
-        return templates.TemplateResponse(
-            "dashboard.html",
-            {
-                "request": request,
-                "title": "Dashboard de Ordens de Serviço",
-                "kpis": kpis,
-                "status_chart_spec": status_chart_spec,
-                "trend_chart_spec": trend_chart_spec,
-            }
-        )
 
     return router
